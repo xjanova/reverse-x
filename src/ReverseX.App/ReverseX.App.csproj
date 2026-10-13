@@ -5,7 +5,14 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>ReverseX</AssemblyName>
     <RootNamespace>ReverseX.App</RootNamespace>
+    <ApplicationIcon>Assets\reversex.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\Logo\*.png" />
+    <Resource Include="Assets\Icons3D\*.png" />
+    <Resource Include="Assets\Backgrounds\*.png" />
+    <Resource Include="Assets\reversex.ico" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\ReverseX.Core\ReverseX.Core.csproj" />
     <ProjectReference Include="..\ReverseX.Licensing\ReverseX.Licensing.csproj" />
