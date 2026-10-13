@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.nupkg
+publish/
+artifacts/
+TestResults/
+.tmp-rea/
+.env
+.env.*
+*.pfx
+*.snk
+*.pem
+*.key
+.xman-signing/

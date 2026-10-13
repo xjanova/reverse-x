@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ReverseX.App/ReverseX.App.csproj" />
+    <Project Path="src/ReverseX.Core/ReverseX.Core.csproj" />
+    <Project Path="src/ReverseX.Licensing/ReverseX.Licensing.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ReverseX.Tests/ReverseX.Tests.csproj" />
+  </Folder>
+</Solution>
