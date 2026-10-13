@@ -9,6 +9,29 @@
     <UserControl.Resources>
         <DataTemplate DataType="{x:Type vm:HomeViewModel}"><views:HomePage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:PlaceholderViewModel}"><views:PlaceholderPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:BinaryViewModel}"><views:BinaryPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:JsViewModel}"><views:JsPage/></DataTemplate>
+
+        <!-- ป้ายหลักฐาน: เห็นจริง / อนุมาน / ยังไม่รู้ -->
+        <DataTemplate DataType="{x:Type vm:EvidenceRow}">
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="66"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ContentControl Content="{Binding Badge}" HorizontalAlignment="Left" VerticalAlignment="Top">
+                    <ContentControl.Style>
+                        <Style TargetType="ContentControl" BasedOn="{StaticResource Chip.Green}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Level}" Value="Inferred"><Setter Property="Background" Value="{DynamicResource B.AmberSoft}"/><Setter Property="BorderBrush" Value="{DynamicResource B.AmberSoftLine}"/><Setter Property="Foreground" Value="{DynamicResource B.AmberText}"/></DataTrigger>
+                                <DataTrigger Binding="{Binding Level}" Value="Unknown"><Setter Property="Background" Value="{DynamicResource B.RedSoft}"/><Setter Property="BorderBrush" Value="{DynamicResource B.RedSoftLine}"/><Setter Property="Foreground" Value="{DynamicResource B.RedText}"/></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ContentControl.Style>
+                </ContentControl>
+                <TextBlock Grid.Column="1" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource B.Text}"/>
+            </Grid>
+        </DataTemplate>
     </UserControl.Resources>
 
     <Grid x:Name="Root" Background="{DynamicResource B.Bg}">

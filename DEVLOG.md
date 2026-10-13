@@ -92,3 +92,42 @@
 ### ติดขัด / ข้อสังเกต
 - เครื่องมือ CluadeX: auto-verify ผ่านแต่ตรวจวงเล็บของ write_file แจ้งเตือนผิด (false positive) กับไฟล์ C#; run_command `cd` ค้างข้ามคำสั่งทำให้ path สัมพัทธ์ผิดครั้งหนึ่ง
 - ยังเหลือเล็กน้อย: ข้อความท้ายเมนูซ้ายขึ้นบรรทัดใหม่เหลือตัว "น" ตัวเดียว; คำบรรยายใต้หัวข้อหน้ามี contrast ต่ำบนพื้นหลังที่ลายเยอะ
+
+
+## เฟส 4 — หน้าไบนารี + หน้าแอป JS/Electron ต่อ REA จริง
+
+### ทำอะไร
+- `ReverseX.Core/Analysis/`: `Models` (model ของเรา + `EvidenceLevel` เห็นจริง/อนุมาน/ยังไม่รู้ แปลงจาก confidence ของ REA), `ReaResultParser` (JSON ของ REA → model; รับทั้งข้อความ MCP และซองของ CLI `{ok,data}`), `AnalysisRunner` (.NET / JS / native, ยกเลิกได้ระหว่างและกลางการเรียก), `ReaSession` (REA process เดียวต่อหนึ่งการวิเคราะห์ เพื่อให้ evidence ที่เก็บไว้ยังอยู่), `SnapshotStore` (`%LOCALAPPDATA%\ReverseX\projects\<id>\snapshot.json.gz`, id = sha256 ของพาธ; เปิดซ้ำไม่วิเคราะห์ใหม่ เตือนเมื่อไฟล์เปลี่ยน), `Paging`, `GoBuildInfo`
+- .NET: `inspect_managed_artifact` + `inspect_managed_members` → ซ้าย type/method ค้นหาได้, กลางแท็บ CIL (จุดยึดที่ REA ถอดได้ ชื่อ method/field ถูก resolve จาก token) / metadata, ขวาการเรียก+ฟิลด์ที่ใช้ และสรุปพร้อมป้ายหลักฐาน
+- JS/Electron: `analyze_javascript_application` (detail=summary) แล้วดึงรายการโมดูลด้วย `inspect_analysis_view` เป็นหน้าๆ (250 ต่อครั้ง เพดาน 5,000) แสดงการ์ดสรุป, แผนผัง renderer → preload → IPC → main, รายการโมดูลแบ่งหน้า 40/หน้า + ค้นหา
+- native (PE/ELF/Mach-O): เรียก `open_binary` → `list_procedures`; มีเส้นทาง `analyze_function` / `get_call_graph` ในโค้ดแล้ว (ใช้เมื่อมี engine). ไม่มี engine → หน้าจอบอกเป็นภาษาไทยว่าต้องมี Ghidra 12.1.x (JDK 21) / IDA / Hopper พร้อมเหตุผลของแต่ละตัวจาก REA และปุ่มเปิดคำแนะนำ — ไม่ใช่ error ดิบ
+- Go: ดูข้อ "การตัดสินใจ"
+- งานเบื้องหลัง + แถบความคืบหน้า + ปุ่มยกเลิก; ข้อผิดพลาดทุกชนิดแปลงเป็นข้อความไทย/อังกฤษ (รายละเอียดดิบลง log เท่านั้น)
+- คลิกแถวในโปรเจกต์ล่าสุด หรือเพิ่มไฟล์เดียวที่รู้จัก → ไปหน้าที่ตรงชนิดและวิเคราะห์เลย
+- แก้ข้อความท้ายเมนู: ตัดบรรทัดเองเป็น 2 บรรทัดเท่ากัน ไม่เหลือ "น" โดดๆ
+- ภาพ: `ReverseX.exe --screenshots DIR --phase4 <dll> <asar> <exe>` วิเคราะห์ของจริงแล้ว render → `design/screens/phase4-*.png` (ว่าง, .NET + meta, JS, native/Go; ทั้ง night และ sky)
+- เทสต์ใหม่ `Phase4Tests.cs` (36 ตัว) ใช้ fixture JSON จริงที่บันทึกจาก REA ใน `tests/ReverseX.Tests/Fixtures/` (ตัดให้เล็ก และแทนพาธเครื่องด้วยพาธตัวอย่าง) ครอบคลุม model, paging, ยกเลิก, ข้อความไม่มี engine, fallback เมื่อผลใหญ่, snapshot, Go; มีเทสต์จริงกับ REA 2 ตัว (ข้ามเองถ้าไม่มี Node)
+- ผลรวม: 76 เทสต์ผ่านหมด
+
+### ของจริงที่ทดสอบ
+- .NET: `ReverseX.Core.dll` ของเราเอง (1,073 method, 114 type) — REA ตอบผ่าน MCP ได้ (~2 MB)
+- Electron: `Obsidian\resources\app.asar` (อ่านอย่างเดียว; เทสต์ตรวจ LastWriteTime ไม่เปลี่ยน) — 109 โมดูล, IPC 15 จุด (ตายตัว 2, ไดนามิก 13)
+- native/Go: `gh.exe` (GitHub CLI, Go 1.25.5, 221 โมดูล) — ได้ข้อมูล PE + build info ของ Go; ส่วน list_procedures ได้ provider_unavailable จริง (ไม่มี engine) จึงโชว์หน้าแนะนำ
+
+### การตัดสินใจ (เจ้าของไม่อยู่ — ตัดสินเองและจดเหตุผล)
+- **REA 6.4.0 ไม่มี tool `inspect_go_binary`** (ตรวจรายการ 170 tool แล้ว) จึงอ่าน build info ของ Go เองในเครื่อง (`GoBuildInfo`: header `\xff Go buildinf:` แบบ inline ของ Go 1.18+) แทน — อ่านอย่างเดียว ไม่เรียก REA
+- JS: `detail=complete` เกินงบ transport ของ MCP จริง (`resource_constraint`) จึงใช้ `summary` + `inspect_analysis_view` แบบแบ่งหน้าตามที่ REA แนะนำ
+- JS: ใช้ `integrity_policy=record-and-continue` เพราะแอปจริง (Obsidian) ถูกปฏิเสธด้วย `artifact_integrity_mismatch` (ตัวแพ็กเกอร์ซิกน์ .node ภายหลัง); หน้าจอแสดงคำเตือนสีเหลืองและ REA ถือไบต์นั้นว่าไม่น่าเชื่อถือ
+- .NET: ถ้าผลใหญ่เกิน MCP จะสลับไปเรียก CLI (`inspect-managed-members --format json --full-output`) ซึ่งไม่มีเพดานนี้; ยังไม่ได้เจอกรณีจริงบนเครื่อง ทดสอบด้วยของปลอมเท่านั้น
+- ข้อความ limitation ที่ REA ส่งมา (อังกฤษ) แสดงตามที่ได้ ไม่แปลเอง เพื่อไม่ให้บิดความหมายของหลักฐาน
+- ป้ายหลักฐาน: confidence=observed → เห็นจริง, derived/inferred → อนุมาน, limitations/unknowns → ยังไม่รู้
+- ปุ่ม "เปิดคำแนะนำ" เปิดหน้า README ของ REA (ไม่ติดตั้งอะไรให้เอง)
+- แท็บ CIL แสดงจุดยึด (anchors) ที่ REA ถอดได้ ไม่ใช่ C# ที่ถอดกลับ และบอกไว้บนหน้าจอ; string literal แสดงเป็น token เพราะ REA ไม่ให้ข้อความ
+
+### ติดขัด / ข้อสังเกต
+- เครื่องมือ CluadeX: `write_file` ไฟล์ใหญ่ (4 ไฟล์ใน Analysis/) บันทึกได้ 0 ไบต์ครั้งแรก (บอกว่า "Created" แต่ไฟล์ว่าง) — ต้องเขียนซ้ำ; ครั้งแรกที่ใช้พารามิเตอร์ `file_text` แทน `content` จึงเสีย
+- เครื่องมือ CluadeX: ตัวตรวจวงเล็บของ write_file แจ้ง "Unbalanced" ผิดกับ C# ที่มี string/char ปีกกา (false positive ซ้ำจากเฟส 3); `edit_file` ที่เรียกเมื่อไฟล์ว่างแจ้งหา text ไม่เจอ
+- `run_command` ผ่าน Git Bash รัน .exe แบบ GUI ที่มีอาร์กิวเมนต์พาธมีช่องว่างแล้วคืน exit 1 โดยไม่มีข้อความ — ใช้ `powershell` + `Start-Process` แทนจึงได้
+- XAML: key ข้อความซ้ำ (S.Dlg.*, S.Btn.PickFolder มีอยู่แล้วจากเฟส 3) ทำให้แอปล้มตอนเปิด ต้องกันซ้ำ; เจอเพราะโหมดภาพหน้าจอ
+- การรัน `dotnet test` ทั้งชุดใช้เวลา ~5 นาทีเพราะเทสต์ REA จริง (npx เริ่มช้า)
+- ยังไม่ทำ (นอกขอบเขตเฟสนี้): แท็บ pseudo-code/แอสเซมบลี/กราฟการเรียกของ native ที่ต้องมี engine จึงยังไม่เคยทดสอบกับผลจริง (มีแค่เส้นทางเรียก + แสดง JSON ดิบของ REA); Go ยังไม่มีเทสต์กับไบนารีจริงในชุดเทสต์ (ทดสอบมือกับ gh.exe ผ่านภาพหน้าจอ ส่วนเทสต์ใช้ blob สังเคราะห์)

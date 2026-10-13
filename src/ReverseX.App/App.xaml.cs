@@ -15,6 +15,13 @@ public partial class App : Application
         Shutdown();
     }
 
+    private async Task RunPhase4Async(string dir, string[] files)
+    {
+        try { await ScreenshotMode.RunPhase4Async(dir, files); }
+        catch (Exception ex) { AppPaths.Log("Phase 4 screenshot mode failed", ex); Console.Error.WriteLine(ex); }
+        Shutdown();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -34,6 +41,14 @@ public partial class App : Application
         {
             var dir = e.Args[shot + 1];
             var empty = e.Args.Contains("--empty");
+            var p4 = Array.IndexOf(e.Args, "--phase4");
+            if (p4 >= 0)
+            {
+                // --phase4 <dotnet.dll> <app.asar|folder> <native.exe>: real analyses of the given files (read-only)
+                var files = e.Args.Skip(p4 + 1).TakeWhile(a => !a.StartsWith("--")).ToArray();
+                _ = RunPhase4Async(dir, files);
+                return;
+            }
             _ = RunScreenshotsAsync(dir, empty);
             return;
         }

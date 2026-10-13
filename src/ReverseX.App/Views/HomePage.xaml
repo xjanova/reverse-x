@@ -252,7 +252,13 @@
                                 <ItemsControl ItemsSource="{Binding Projects}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Border x:Name="Row" CornerRadius="12" Padding="8,7" Margin="0,0,0,2" Background="Transparent">
+                                            <Border x:Name="Row" CornerRadius="12" Padding="8,7" Margin="0,0,0,2" Background="Transparent" Cursor="Hand"
+                                                    ToolTip="{DynamicResource S.Recent.Open}">
+                                                <Border.InputBindings>
+                                                    <MouseBinding MouseAction="LeftClick"
+                                                                  Command="{Binding DataContext.OpenProjectCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                  CommandParameter="{Binding}"/>
+                                                </Border.InputBindings>
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="Auto"/>

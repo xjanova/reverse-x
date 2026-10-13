@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using ReverseX.App.ViewModels;
 using ReverseX.Core;
+using ReverseX.Core.Analysis;
 using ReverseX.Core.Files;
 using ReverseX.Core.Projects;
 
@@ -54,6 +55,68 @@ internal static class ScreenshotMode
         }
         win.Close();
         try { File.Delete(tmp); } catch (IOException) { }
+    }
+
+    /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe].</summary>
+    public static async Task RunPhase4Async(string dir, string[] files)
+    {
+        Directory.CreateDirectory(dir);
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "rx-shot4-" + Guid.NewGuid().ToString("N"));
+        var store = new ProjectStore(Path.Combine(tmpRoot, "projects.json"));
+        Directory.CreateDirectory(tmpRoot);
+        var vm = new MainViewModel(store, snapshots: new SnapshotStore(Path.Combine(tmpRoot, "projects")));
+        var win = new MainWindow(vm)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000, Top = 0, ShowInTaskbar = false, Width = 1280, Height = 800,
+        };
+        win.Show();
+        await Flush();
+
+        async Task WaitReady(AnalysisPageBase page)
+        {
+            var until = DateTime.UtcNow.AddMinutes(4);
+            while (page.State is RunState.Running or RunState.Idle && DateTime.UtcNow < until) await Task.Delay(300);
+            await Flush();
+        }
+
+        void Shoot(string page, string? extra = null)
+        {
+            foreach (var theme in new[] { UiPrefs.Night, UiPrefs.Sky })
+            {
+                ThemeManager.Apply(theme, save: false);
+                win.UpdateLayout();
+                Save(win, Path.Combine(dir, $"phase4-{page}{extra}-{(theme == UiPrefs.Sky ? "sky" : "night")}.png"));
+            }
+            ThemeManager.Apply(UiPrefs.Night, save: false);
+        }
+
+        // empty pages first
+        vm.Select("Binary"); await Flush(); Shoot("binary", "-empty");
+        vm.Select("Js"); await Flush(); Shoot("js", "-empty");
+
+        if (files.Length > 0)
+        {
+            await vm.OpenEntryAsync(files[0], FileKindDetector.Detect(files[0]).Kind);
+            await WaitReady(vm.Binary);
+            await Flush(); Shoot("binary-dotnet");
+            vm.Binary.Tab = BinTab.Meta; await Flush(); Shoot("binary-dotnet", "-meta");
+            vm.Binary.Tab = BinTab.Cil;
+        }
+        if (files.Length > 1)
+        {
+            await vm.OpenEntryAsync(files[1], FileKindDetector.Detect(files[1]).Kind);
+            await WaitReady(vm.Js);
+            await Flush(); Shoot("js");
+        }
+        if (files.Length > 2)
+        {
+            await vm.OpenEntryAsync(files[2], FileKindDetector.Detect(files[2]).Kind);
+            await WaitReady(vm.Binary);
+            await Flush(); Shoot("binary-native");
+        }
+        win.Close();
+        try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 
     private static async Task Flush()

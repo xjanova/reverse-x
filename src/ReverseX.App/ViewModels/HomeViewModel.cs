@@ -31,11 +31,14 @@ public sealed class HomeViewModel : ObservableObject
         RemoveCommand = new RelayCommand(o => { if (o is ProjectItemViewModel p) Remove(p); });
         DismissNoticeCommand = new RelayCommand(() => SetNotice(null));
         OpenAiCommand = new RelayCommand(() => OpenAiRequested?.Invoke());
+        OpenProjectCommand = new RelayCommand(o => { if (o is ProjectItemViewModel p) OpenRequested?.Invoke(p.Entry); });
         Loc.Changed += RefreshText;
         ReloadProjects();
     }
 
     public event Action? OpenAiRequested;
+    /// <summary>Raised when the user opens a project (row click) or adds exactly one supported file.</summary>
+    public event Action<ProjectEntry>? OpenRequested;
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = new();
     public ObservableCollection<ToolItemViewModel> Tools { get; } = new();
@@ -44,6 +47,7 @@ public sealed class HomeViewModel : ObservableObject
     public ICommand RemoveCommand { get; }
     public ICommand DismissNoticeCommand { get; }
     public ICommand OpenAiCommand { get; }
+    public ICommand OpenProjectCommand { get; }
 
     public string Search
     {
@@ -170,6 +174,7 @@ public sealed class HomeViewModel : ObservableObject
         else if (added.Count == 1)
         {
             var (entry, kind) = added[0];
+            if (kind.Kind != FileKind.Unknown) OpenRequested?.Invoke(entry);
             if (kind.Kind == FileKind.Unknown) SetNotice("Notice.AddedUnknown", error: false, entry.Name);
             else SetNotice("Notice.Added", error: false, entry.Name, Loc.Get(KindInfo.NameKey(kind.Kind)));
         }

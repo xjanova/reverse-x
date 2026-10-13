@@ -26,6 +26,7 @@ public sealed class RelayCommand : ICommand
     private readonly Func<object?, bool>? _can;
 
     public RelayCommand(Action run) : this(_ => run()) { }
+    public RelayCommand(Action run, Func<bool> can) : this(_ => run(), _ => can()) { }
     public RelayCommand(Action<object?> run, Func<object?, bool>? can = null) { _run = run; _can = can; }
 
     public event EventHandler? CanExecuteChanged
