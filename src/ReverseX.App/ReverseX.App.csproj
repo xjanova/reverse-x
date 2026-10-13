@@ -11,6 +11,8 @@
     <Resource Include="Assets\Logo\*.png" />
     <Resource Include="Assets\Icons3D\*.png" />
     <Resource Include="Assets\Backgrounds\*.png" />
+    <Resource Include="Assets\Fonts\*.ttf" />
+    <Resource Include="Assets\Fonts\OFL-*.txt" />
     <Resource Include="Assets\reversex.ico" />
   </ItemGroup>
   <ItemGroup>

@@ -1,0 +1,118 @@
+<!-- Reverse X · กลางคืน. ทุก key ต้องมีใน Palette.Sky.xaml ด้วย (มีเทสต์ตรวจ) ThemeManager สลับทั้งไฟล์ตอนรัน -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- พื้นหลังหน้าต่าง -->
+    <SolidColorBrush x:Key="B.Bg" Color="#050A1C"/>
+    <ImageBrush x:Key="B.WinImage" ImageSource="/ReverseX;component/Assets/Backgrounds/night.png" Stretch="UniformToFill"/>
+    <SolidColorBrush x:Key="B.WinShade" Color="#33030818"/>
+    <LinearGradientBrush x:Key="B.TitleFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#B328468C" Offset="0"/>
+        <GradientStop Color="#D9060E28" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.SideFill" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#803C6EC8" Offset="0"/>
+        <GradientStop Color="#E3081434" Offset="0.3"/>
+        <GradientStop Color="#EB040A20" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- กระจก 3 ชั้น + gloss + ขอบ -->
+    <LinearGradientBrush x:Key="B.CardGrad" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#5A7FB2F5" Offset="0"/>
+        <GradientStop Color="#9410234F" Offset="0.42"/>
+        <GradientStop Color="#DD040A20" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.Gloss" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#3DFFFFFF" Offset="0"/>
+        <GradientStop Color="#0DFFFFFF" Offset="0.4"/>
+        <GradientStop Color="#00FFFFFF" Offset="0.5"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.GlassLine" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#B3C6E6FF" Offset="0"/>
+        <GradientStop Color="#557FB2E8" Offset="0.45"/>
+        <GradientStop Color="#406493D0" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.InnerLine" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#40FFFFFF" Offset="0"/>
+        <GradientStop Color="#00FFFFFF" Offset="0.5"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.GlassBtn" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#803F6CC0" Offset="0"/>
+        <GradientStop Color="#D9122560" Offset="0.49"/>
+        <GradientStop Color="#EB060E28" Offset="0.5"/>
+        <GradientStop Color="#E60E1E50" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="B.GlassBtnText" Color="#EAF4FF"/>
+    <SolidColorBrush x:Key="B.Line" Color="#4D7FAFE6"/>
+    <SolidColorBrush x:Key="B.Hover" Color="#3360A4FF"/>
+    <SolidColorBrush x:Key="B.Row" Color="#0D96C8FF"/>
+    <SolidColorBrush x:Key="B.RowAlt" Color="#1A6FA0F0"/>
+    <SolidColorBrush x:Key="B.Input" Color="#A6050C26"/>
+    <SolidColorBrush x:Key="B.InputLine" Color="#6B5A8CD0"/>
+    <SolidColorBrush x:Key="B.InputShadow" Color="#66000000"/>
+    <SolidColorBrush x:Key="B.Track" Color="#2E7FB3FF"/>
+    <SolidColorBrush x:Key="B.Thumb" Color="#805C7FC0"/>
+    <SolidColorBrush x:Key="B.DropFill" Color="#1A38D9F5"/>
+    <SolidColorBrush x:Key="B.DropLine" Color="#9938D9F5"/>
+    <SolidColorBrush x:Key="B.DropLineActive" Color="#F2C75C"/>
+    <LinearGradientBrush x:Key="B.GlassGlowLine" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#0038D9F5" Offset="0"/>
+        <GradientStop Color="#9938D9F5" Offset="0.5"/>
+        <GradientStop Color="#0038D9F5" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- ตัวอักษร -->
+    <SolidColorBrush x:Key="B.Text" Color="#EAF4FF"/>
+    <SolidColorBrush x:Key="B.Text2" Color="#A9C3E6"/>
+    <SolidColorBrush x:Key="B.Text3" Color="#7A94BF"/>
+    <SolidColorBrush x:Key="B.NumText" Color="#F2F8FF"/>
+    <SolidColorBrush x:Key="B.Cyan" Color="#38D9F5"/>
+    <SolidColorBrush x:Key="B.Gold" Color="#F2C75C"/>
+    <LinearGradientBrush x:Key="B.Wordmark" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFFFF" Offset="0"/>
+        <GradientStop Color="#DDE6EE" Offset="0.4"/>
+        <GradientStop Color="#8C9AA8" Offset="0.52"/>
+        <GradientStop Color="#E9F1F7" Offset="0.72"/>
+        <GradientStop Color="#A7B2BD" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.WordmarkX" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#E9FDFF" Offset="0"/>
+        <GradientStop Color="#5EE3F7" Offset="0.48"/>
+        <GradientStop Color="#0FA0D2" Offset="0.52"/>
+        <GradientStop Color="#7BEAFF" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="B.Headline" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#9BF3FF" Offset="0"/>
+        <GradientStop Color="#38D9F5" Offset="1"/>
+    </LinearGradientBrush>
+
+    <!-- สถานะ (จุด + ป้ายอ่อน) -->
+    <SolidColorBrush x:Key="B.Green" Color="#3EE08A"/>
+    <SolidColorBrush x:Key="B.Amber" Color="#FFB547"/>
+    <SolidColorBrush x:Key="B.Red" Color="#FF6070"/>
+    <SolidColorBrush x:Key="B.Grey" Color="#9AA9C0"/>
+    <SolidColorBrush x:Key="B.Violet" Color="#A79BFF"/>
+    <SolidColorBrush x:Key="B.RedSoft" Color="#2EFF4D5E"/>
+    <SolidColorBrush x:Key="B.RedSoftLine" Color="#8CFF4D5E"/>
+    <SolidColorBrush x:Key="B.RedText" Color="#FFC2C8"/>
+    <SolidColorBrush x:Key="B.AmberSoft" Color="#26FFB547"/>
+    <SolidColorBrush x:Key="B.AmberSoftLine" Color="#8CFFB547"/>
+    <SolidColorBrush x:Key="B.AmberText" Color="#FFE2A8"/>
+    <SolidColorBrush x:Key="B.GreenSoft" Color="#2635D07F"/>
+    <SolidColorBrush x:Key="B.GreenSoftLine" Color="#8035D07F"/>
+    <SolidColorBrush x:Key="B.GreenText" Color="#B8F5D2"/>
+    <SolidColorBrush x:Key="B.CyanSoft" Color="#2438D9F5"/>
+    <SolidColorBrush x:Key="B.CyanSoftLine" Color="#8038D9F5"/>
+    <SolidColorBrush x:Key="B.CyanText" Color="#BFF6FF"/>
+    <SolidColorBrush x:Key="B.VioletSoft" Color="#33A79BFF"/>
+    <SolidColorBrush x:Key="B.VioletSoftLine" Color="#99A79BFF"/>
+    <SolidColorBrush x:Key="B.VioletText" Color="#DAD5FF"/>
+    <SolidColorBrush x:Key="B.GreySoft" Color="#269AA9C0"/>
+    <SolidColorBrush x:Key="B.GreySoftLine" Color="#669AA9C0"/>
+    <SolidColorBrush x:Key="B.GreyText" Color="#C3CFE0"/>
+
+    <!-- เอฟเฟกต์ -->
+    <DropShadowEffect x:Key="E.Num" BlurRadius="14" ShadowDepth="0" Color="#38D9F5" Opacity="0.5"/>
+    <DropShadowEffect x:Key="E.Title" BlurRadius="8" ShadowDepth="2" Direction="270" Color="#000000" Opacity="0.6"/>
+    <DropShadowEffect x:Key="E.Logo" BlurRadius="26" ShadowDepth="0" Color="#38D9F5" Opacity="0.5"/>
+</ResourceDictionary>

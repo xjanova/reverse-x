@@ -1,0 +1,136 @@
+<!-- App text · English. Same keys as Strings.th.xaml (a test checks this). -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <sys:String x:Key="S.App.Title">REVERSE X — AI reverse-engineering studio · powered by REA</sys:String>
+    <sys:String x:Key="S.Theme.Night">Night</sys:String>
+    <sys:String x:Key="S.Theme.Sky">Sky</sys:String>
+
+    <sys:String x:Key="S.Nav.Home">Overview</sys:String>
+    <sys:String x:Key="S.Nav.Ai">AI assistant</sys:String>
+    <sys:String x:Key="S.Nav.Binary">Binary · EXE/DLL</sys:String>
+    <sys:String x:Key="S.Nav.Js">JS/Electron apps</sys:String>
+    <sys:String x:Key="S.Nav.Android">Android · APK</sys:String>
+    <sys:String x:Key="S.Nav.Dotnet">.NET Assembly</sys:String>
+    <sys:String x:Key="S.Nav.Web">Web · Network</sys:String>
+    <sys:String x:Key="S.Nav.Db">Databases · Files</sys:String>
+    <sys:String x:Key="S.Nav.Evidence">Evidence</sys:String>
+    <sys:String x:Key="S.Nav.Settings">Settings</sys:String>
+
+    <sys:String x:Key="S.Side.ReaReady">REA {0} is ready</sys:String>
+    <sys:String x:Key="S.Side.ReaChecking">Checking REA…</sys:String>
+    <sys:String x:Key="S.Side.ReaProblem">REA is not ready · see the tools card</sys:String>
+    <sys:String x:Key="S.Side.Local">Analysis runs locally; your files are never uploaded</sys:String>
+    <sys:String x:Key="S.Side.Legal">Use only on software you are authorised to analyse</sys:String>
+
+    <sys:String x:Key="S.Home.Title">Overview</sys:String>
+    <sys:String x:Key="S.Home.Subtitle">Start by dropping in something you want to take apart</sys:String>
+    <sys:String x:Key="S.Pill.Rea">REA {0}</sys:String>
+    <sys:String x:Key="S.Pill.ReaChecking">REA · checking</sys:String>
+    <sys:String x:Key="S.Pill.ReaProblem">REA · not ready</sys:String>
+    <sys:String x:Key="S.Pill.Ai">AI · not connected</sys:String>
+    <sys:String x:Key="S.Pill.Local">Runs locally · no upload</sys:String>
+
+    <sys:String x:Key="S.Hero.Line1">Spotted a feature you like?</sys:String>
+    <sys:String x:Key="S.Hero.Line2">Take it apart down to the binary</sys:String>
+    <sys:String x:Key="S.Hero.Body">Drop in a program, app or file, then ask the AI how it works. Every answer comes with evidence, and you can have the same thing built in your own project.</sys:String>
+    <sys:String x:Key="S.Drop.Title">Drop a file or folder here</sys:String>
+    <sys:String x:Key="S.Drop.Hint">We detect what it is and add it as a project</sys:String>
+    <sys:String x:Key="S.Drop.Active">Release to add as a project</sys:String>
+    <sys:String x:Key="S.Btn.PickFile">Choose file</sys:String>
+    <sys:String x:Key="S.Btn.PickFolder">Choose folder</sys:String>
+    <sys:String x:Key="S.Dlg.PickFile">Choose a file to analyse</sys:String>
+    <sys:String x:Key="S.Dlg.AllFiles">All files</sys:String>
+    <sys:String x:Key="S.Dlg.PickFolder">Choose an app folder to analyse</sys:String>
+
+    <sys:String x:Key="S.Stat.Projects">Projects</sys:String>
+    <sys:String x:Key="S.Stat.ProjectsSub">Binary {0} · JS {1} · APK {2} · other {3}</sys:String>
+    <sys:String x:Key="S.Stat.Functions">Functions decompiled</sys:String>
+    <sys:String x:Key="S.Stat.FunctionsSub">Nothing analysed yet</sys:String>
+    <sys:String x:Key="S.Stat.Evidence">Evidence kept</sys:String>
+    <sys:String x:Key="S.Stat.EvidenceSub">No evidence yet</sys:String>
+    <sys:String x:Key="S.Stat.Unknown">Open questions</sys:String>
+    <sys:String x:Key="S.Stat.UnknownSub">Nothing waiting to investigate</sys:String>
+
+    <sys:String x:Key="S.Recent.Title">Recent projects</sys:String>
+    <sys:String x:Key="S.Recent.Search">Search projects…</sys:String>
+    <sys:String x:Key="S.Recent.EmptyTitle">No projects yet</sys:String>
+    <sys:String x:Key="S.Recent.EmptyBody">Drop a file or folder on the box above, or press “Choose file”, to take apart your first program.</sys:String>
+    <sys:String x:Key="S.Recent.NoMatch">No project matches your search</sys:String>
+    <sys:String x:Key="S.Recent.NotAnalyzed">Not analysed</sys:String>
+    <sys:String x:Key="S.Recent.Remove">Remove from list</sys:String>
+
+    <sys:String x:Key="S.Kind.Unknown">Unknown type</sys:String>
+    <sys:String x:Key="S.Kind.Folder">Folder</sys:String>
+    <sys:String x:Key="S.Kind.AppFolder">App folder</sys:String>
+    <sys:String x:Key="S.Kind.Pe">Binary</sys:String>
+    <sys:String x:Key="S.Kind.DotNet">.NET Assembly</sys:String>
+    <sys:String x:Key="S.Kind.Elf">ELF binary</sys:String>
+    <sys:String x:Key="S.Kind.MachO">Mach-O binary</sys:String>
+    <sys:String x:Key="S.Kind.Apk">Android app</sys:String>
+    <sys:String x:Key="S.Kind.Asar">ASAR package</sys:String>
+    <sys:String x:Key="S.Kind.Sqlite">SQLite database</sys:String>
+    <sys:String x:Key="S.Kind.Har">HAR network log</sys:String>
+    <sys:String x:Key="S.Kind.Wasm">WebAssembly</sys:String>
+
+    <sys:String x:Key="S.Time.Now">just now</sys:String>
+    <sys:String x:Key="S.Time.Min">{0} min ago</sys:String>
+    <sys:String x:Key="S.Time.Hour">{0} h ago</sys:String>
+    <sys:String x:Key="S.Time.Day">{0} d ago</sys:String>
+    <sys:String x:Key="S.Time.Month">{0} mo ago</sys:String>
+
+    <sys:String x:Key="S.Tools.Title">Tools on this machine</sys:String>
+    <sys:String x:Key="S.Tools.Recheck">Re-check</sys:String>
+    <sys:String x:Key="S.Lvl.Checking">Checking</sys:String>
+    <sys:String x:Key="S.Lvl.Ok">Ready</sys:String>
+    <sys:String x:Key="S.Lvl.Warn">Fix advised</sys:String>
+    <sys:String x:Key="S.Lvl.Bad">Needs fixing</sys:String>
+    <sys:String x:Key="S.Lvl.Off">Optional</sys:String>
+
+    <sys:String x:Key="S.Tool.Msg.checking">Checking…</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.ok">Ready · runs REA and JS/Electron work</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.old">v{0} is too old · needs Node.js 22.19+ / 24.11+ / 26+. Update at nodejs.org</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.missing">Node.js not found · install it from nodejs.org (22.19+ / 24.11+ / 26+), then reopen the app</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.ok">Ready · {1} analysis tools</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.needNode">Waiting for a usable Node.js</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.timeout">REA took too long · check your internet (first run downloads it), then press “Re-check”</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.failed">Could not run REA · check your internet, then press “Re-check”</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.ok">Ready · decompiles binaries to pseudo-C</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.noJava">Deep binary analysis · needs JDK 21 first (no Java on this machine)</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.needJdk21">Deep binary analysis · needs JDK 21 (this machine has Java {0})</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.notSet">Deep binary analysis · GHIDRA_INSTALL_DIR is not set (needs Ghidra 12.1.x)</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.unknown">Cannot check yet because REA is not ready</sys:String>
+    <sys:String x:Key="S.Tool.Msg.jadx.ok">Ready · can take apart Android APKs</sys:String>
+    <sys:String x:Key="S.Tool.Msg.jadx.missing">Android APK · JADX is not installed</sys:String>
+    <sys:String x:Key="S.Tool.Msg.browser.ok">Websites · network capture · screenshots</sys:String>
+    <sys:String x:Key="S.Tool.Msg.browser.missing">Chrome or Edge not found · needed for web work</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ida.ok">Ready · IDA connected through your own licence</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ida.optional">Bring your own licence · Hopper is not available on Windows</sys:String>
+
+    <sys:String x:Key="S.Ask.Title">Try asking the AI</sys:String>
+    <sys:String x:Key="S.Ask.Q1">How does the “Export PDF” button in this app work, and how do I build the same in ours?</sys:String>
+    <sys:String x:Key="S.Ask.Q2">What permissions does this program ask for, and where does it send data?</sys:String>
+    <sys:String x:Key="S.Ask.Q3">What changed between version 3.1 and 3.2?</sys:String>
+    <sys:String x:Key="S.Ask.Open">Open AI assistant</sys:String>
+
+    <sys:String x:Key="S.Notice.Added">Added “{0}” · detected: {1}</sys:String>
+    <sys:String x:Key="S.Notice.AddedUnknown">Added “{0}”, but this file type is not recognised</sys:String>
+    <sys:String x:Key="S.Notice.Partial">Added {0} of {1} items · problem with the rest: {2}</sys:String>
+    <sys:String x:Key="S.Notice.Dismiss">Close</sys:String>
+    <sys:String x:Key="S.Err.NotFound">That file or folder was not found. It may have been moved or deleted.</sys:String>
+    <sys:String x:Key="S.Err.NoAccess">Cannot open this file because you have no read permission. Pick another file or run the app with suitable rights.</sys:String>
+    <sys:String x:Key="S.Err.Generic">Could not add the project. Please try again (details are in the app log).</sys:String>
+
+    <sys:String x:Key="S.Soon.Title">Coming soon</sys:String>
+    <sys:String x:Key="S.Soon.Body">This page is under construction and will be available soon.</sys:String>
+    <sys:String x:Key="S.Page.Ai.Desc">Ask about the software you took apart and get answers with evidence and what is still unknown.</sys:String>
+    <sys:String x:Key="S.Page.Binary.Desc">See pseudo-C, assembly and call relationships of EXE/DLL files.</sys:String>
+    <sys:String x:Key="S.Page.Js.Desc">See the module map and IPC of Electron / JavaScript apps.</sys:String>
+    <sys:String x:Key="S.Page.Android.Desc">See the structure and permissions of Android APKs.</sys:String>
+    <sys:String x:Key="S.Page.Dotnet.Desc">See the classes and methods of a .NET assembly.</sys:String>
+    <sys:String x:Key="S.Page.Web.Desc">See a website and the network calls it makes.</sys:String>
+    <sys:String x:Key="S.Page.Db.Desc">See the tables and data inside database files such as SQLite.</sys:String>
+    <sys:String x:Key="S.Page.Evidence.Desc">Collected evidence and version-to-version comparison.</sys:String>
+    <sys:String x:Key="S.Page.Settings.Desc">Theme, language, API key, licence and updates.</sys:String>
+</ResourceDictionary>

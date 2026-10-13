@@ -68,3 +68,27 @@
 - ไม่มีทางดาวน์โหลดไฟล์ตรง: ใช้วิธีจาก brain คือ fetch blob ในหน้า → เขียนลง OPFS → หาไฟล์ใน `%LOCALAPPDATA%\Google\Chrome\User Data\Default\File System` ตามขนาด byte แล้ว copy (ใช้ได้ดี)
 - แท็บใหม่ของ tab group ถูกสร้างได้เมื่อเรียก `tabs_context_mcp createIfEmpty` ก่อนเท่านั้น (`tabs_create_mcp` ตรงๆ ล้มเหลว)
 - `run_command` heredoc python ที่ `cd` ใน subshell ทำให้ cwd ผิด ใช้ `write_file` เขียนสคริปต์แล้วรันจาก root แทน
+
+
+## เฟส 3 — ธีม + หน้าต่างหลัก + หน้าภาพรวม
+
+### ทำอะไร
+- ธีม: `Theme/Palette.Night.xaml`, `Palette.Sky.xaml` (key ชุดเดียวกัน มีเทสต์ตรวจ), `Theme/Theme.xaml` (สไตล์ล้วน: การ์ดกระจก, ปุ่ม aqua/violet/ghost, เมนูแคปซูล, ชิป, ช่องค้นหา ฯลฯ ใช้ DynamicResource ทั้งหมด)
+- `Services/ThemeManager` สลับพาเลตต์สด เก็บที่ `%LOCALAPPDATA%\ReverseX\ui.json`; `Services/Loc` สลับภาษาไทย/อังกฤษ (`Resources/Strings.th|en.xaml`, ค่าเริ่มต้นไทย, มีเทสต์ตรวจ key ตรงกัน)
+- ฟอนต์ Kanit/Anuphan ฝังเป็น Resource พร้อมไฟล์ OFL; mono ใช้ Cascadia Mono ของระบบ
+- หน้าต่างหลัก: title bar ทำเอง (สลับธีม/ภาษา, ย่อ/ขยาย/ปิด), เมนูซ้าย 10 รายการ + โลโก้ + ข้อความ "ใช้กับซอฟต์แวร์ที่คุณมีสิทธิ์วิเคราะห์", หน้าที่ยังไม่ทำเป็น placeholder "กำลังจะมา"
+- หน้าภาพรวม: ช่องลากวาง + เลือกไฟล์/โฟลเดอร์ → `FileKindDetector` → `ProjectStore` (projects.json), การ์ดเครื่องมือจริง (`ToolCheckService`: NodeProbe + ReaCli doctor/providers + Java/JADX/เบราว์เซอร์ ทำเบื้องหลัง), การ์ดสถิติ 4 ใบ, โปรเจกต์ล่าสุด, ลองถาม AI, สถานะว่าง, ข้อผิดพลาดเป็นข้อความไทย
+- ภาพหน้าจอ: `ReverseX.exe --screenshots DIR [--empty]` render หน้าต่างจริงด้วย RenderTargetBitmap (ไม่ใช้เมาส์/จับจอ) → `design/screens/phase3-home-{night,sky}[-empty].png`
+- เทสต์ใหม่ `tests/ReverseX.Tests/Phase3Tests.cs`: palette/strings key, ตรวจชนิดไฟล์, ProjectStore, ToolStatusMapper (รวม 42 ตัวผ่าน)
+
+### เฟสนี้ถูกพักและทำต่อ
+รอบแรกถูกหยุดกลางทางเพราะเจ้าของอัปเดตตัว CluadeX (ไม่ใช่งานผิด) ไฟล์ที่เขียนไว้ยังอยู่ครบแต่ยังไม่ commit และ build ยังไม่ผ่าน (HomeViewModel ขาด `using System.IO`, RelayCommand ambiguous, deconstruct ใน lambda) — รอบนี้แก้แล้วเขียนเทสต์ + โหมด screenshot ต่อ
+
+### การตัดสินใจ
+- ใช้โหมด `--screenshots` ใน App เอง แทนโปรเจกต์คอนโซลแยก (ใช้ MainWindow จริง + ข้อมูลเครื่องมือจริง ได้ภาพตรงกับที่ผู้ใช้เห็น); ใช้ projects.json ชั่วคราว ไม่แตะของผู้ใช้
+- ธีม Sky: ชิปสถานะสีเขียว/ฟ้า/ม่วงมองจางบนเมฆ จึงเปลี่ยนพื้นเป็นสีอ่อนทึบ
+- ภาพ render ที่ 1280x960 เพื่อให้เห็นการ์ดล่างครบ (ที่ 800 สูงหน้าจะมี scroll)
+
+### ติดขัด / ข้อสังเกต
+- เครื่องมือ CluadeX: auto-verify ผ่านแต่ตรวจวงเล็บของ write_file แจ้งเตือนผิด (false positive) กับไฟล์ C#; run_command `cd` ค้างข้ามคำสั่งทำให้ path สัมพัทธ์ผิดครั้งหนึ่ง
+- ยังเหลือเล็กน้อย: ข้อความท้ายเมนูซ้ายขึ้นบรรทัดใหม่เหลือตัว "น" ตัวเดียว; คำบรรยายใต้หัวข้อหน้ามี contrast ต่ำบนพื้นหลังที่ลายเยอะ

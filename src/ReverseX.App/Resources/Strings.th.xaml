@@ -1,0 +1,136 @@
+<!-- ข้อความในแอป · ไทย (ค่าเริ่มต้น). key ต้องตรงกับ Strings.en.xaml ทุกตัว (มีเทสต์ตรวจ) -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <sys:String x:Key="S.App.Title">REVERSE X — สตูดิโอแกะโปรแกรมด้วย AI · ขับเคลื่อนด้วย REA</sys:String>
+    <sys:String x:Key="S.Theme.Night">กลางคืน</sys:String>
+    <sys:String x:Key="S.Theme.Sky">ท้องฟ้า</sys:String>
+
+    <sys:String x:Key="S.Nav.Home">ภาพรวม</sys:String>
+    <sys:String x:Key="S.Nav.Ai">ผู้ช่วย AI</sys:String>
+    <sys:String x:Key="S.Nav.Binary">ไบนารี · EXE/DLL</sys:String>
+    <sys:String x:Key="S.Nav.Js">แอป JS/Electron</sys:String>
+    <sys:String x:Key="S.Nav.Android">Android · APK</sys:String>
+    <sys:String x:Key="S.Nav.Dotnet">.NET Assembly</sys:String>
+    <sys:String x:Key="S.Nav.Web">เว็บ · เน็ตเวิร์ก</sys:String>
+    <sys:String x:Key="S.Nav.Db">ฐานข้อมูล · ไฟล์</sys:String>
+    <sys:String x:Key="S.Nav.Evidence">หลักฐาน</sys:String>
+    <sys:String x:Key="S.Nav.Settings">ตั้งค่า</sys:String>
+
+    <sys:String x:Key="S.Side.ReaReady">REA {0} พร้อมทำงาน</sys:String>
+    <sys:String x:Key="S.Side.ReaChecking">กำลังตรวจ REA…</sys:String>
+    <sys:String x:Key="S.Side.ReaProblem">REA ยังไม่พร้อม · ดูการ์ดเครื่องมือ</sys:String>
+    <sys:String x:Key="S.Side.Local">วิเคราะห์ในเครื่อง ไม่อัปโหลดไฟล์ของคุณ</sys:String>
+    <sys:String x:Key="S.Side.Legal">ใช้กับซอฟต์แวร์ที่คุณมีสิทธิ์วิเคราะห์เท่านั้น</sys:String>
+
+    <sys:String x:Key="S.Home.Title">ภาพรวม</sys:String>
+    <sys:String x:Key="S.Home.Subtitle">เริ่มจากลากของที่อยากแกะเข้ามา</sys:String>
+    <sys:String x:Key="S.Pill.Rea">REA {0}</sys:String>
+    <sys:String x:Key="S.Pill.ReaChecking">REA · กำลังตรวจ</sys:String>
+    <sys:String x:Key="S.Pill.ReaProblem">REA · ยังไม่พร้อม</sys:String>
+    <sys:String x:Key="S.Pill.Ai">AI · ยังไม่เชื่อมต่อ</sys:String>
+    <sys:String x:Key="S.Pill.Local">ทำงานในเครื่อง · ไม่อัปโหลด</sys:String>
+
+    <sys:String x:Key="S.Hero.Line1">เห็นฟีเจอร์ที่ชอบ?</sys:String>
+    <sys:String x:Key="S.Hero.Line2">แกะดูได้ถึงระดับไบนารี</sys:String>
+    <sys:String x:Key="S.Hero.Body">ลากโปรแกรม แอป หรือไฟล์เข้ามา แล้วถาม AI ว่ามันทำงานยังไง ได้คำตอบพร้อมหลักฐานทุกข้อ แล้วสั่งสร้างแบบเดียวกันในโปรเจกต์ของเราได้</sys:String>
+    <sys:String x:Key="S.Drop.Title">ลากไฟล์หรือโฟลเดอร์มาวางที่นี่</sys:String>
+    <sys:String x:Key="S.Drop.Hint">ระบบดูให้เองว่าเป็นอะไร แล้วเพิ่มเป็นโปรเจกต์</sys:String>
+    <sys:String x:Key="S.Drop.Active">ปล่อยเมาส์เพื่อเพิ่มเป็นโปรเจกต์</sys:String>
+    <sys:String x:Key="S.Btn.PickFile">เลือกไฟล์</sys:String>
+    <sys:String x:Key="S.Btn.PickFolder">เลือกโฟลเดอร์</sys:String>
+    <sys:String x:Key="S.Dlg.PickFile">เลือกไฟล์ที่ต้องการแกะ</sys:String>
+    <sys:String x:Key="S.Dlg.AllFiles">ไฟล์ทั้งหมด</sys:String>
+    <sys:String x:Key="S.Dlg.PickFolder">เลือกโฟลเดอร์แอปที่ต้องการแกะ</sys:String>
+
+    <sys:String x:Key="S.Stat.Projects">โปรเจกต์ทั้งหมด</sys:String>
+    <sys:String x:Key="S.Stat.ProjectsSub">ไบนารี {0} · JS {1} · APK {2} · อื่นๆ {3}</sys:String>
+    <sys:String x:Key="S.Stat.Functions">ฟังก์ชันที่ถอดแล้ว</sys:String>
+    <sys:String x:Key="S.Stat.FunctionsSub">ยังไม่ได้วิเคราะห์</sys:String>
+    <sys:String x:Key="S.Stat.Evidence">หลักฐานที่เก็บไว้</sys:String>
+    <sys:String x:Key="S.Stat.EvidenceSub">ยังไม่มีหลักฐาน</sys:String>
+    <sys:String x:Key="S.Stat.Unknown">เรื่องที่ยังไม่รู้</sys:String>
+    <sys:String x:Key="S.Stat.UnknownSub">ยังไม่มีเรื่องรอสืบ</sys:String>
+
+    <sys:String x:Key="S.Recent.Title">โปรเจกต์ล่าสุด</sys:String>
+    <sys:String x:Key="S.Recent.Search">ค้นหาโปรเจกต์…</sys:String>
+    <sys:String x:Key="S.Recent.EmptyTitle">ยังไม่มีโปรเจกต์</sys:String>
+    <sys:String x:Key="S.Recent.EmptyBody">ลากไฟล์หรือโฟลเดอร์ลงช่องด้านบน หรือกด “เลือกไฟล์” เพื่อเริ่มแกะโปรแกรมตัวแรกของคุณ</sys:String>
+    <sys:String x:Key="S.Recent.NoMatch">ไม่พบโปรเจกต์ที่ตรงกับคำค้น</sys:String>
+    <sys:String x:Key="S.Recent.NotAnalyzed">ยังไม่วิเคราะห์</sys:String>
+    <sys:String x:Key="S.Recent.Remove">เอาออกจากรายการ</sys:String>
+
+    <sys:String x:Key="S.Kind.Unknown">ไม่ทราบชนิด</sys:String>
+    <sys:String x:Key="S.Kind.Folder">โฟลเดอร์</sys:String>
+    <sys:String x:Key="S.Kind.AppFolder">โฟลเดอร์แอป</sys:String>
+    <sys:String x:Key="S.Kind.Pe">ไบนารี</sys:String>
+    <sys:String x:Key="S.Kind.DotNet">.NET Assembly</sys:String>
+    <sys:String x:Key="S.Kind.Elf">ไบนารี ELF</sys:String>
+    <sys:String x:Key="S.Kind.MachO">ไบนารี Mach-O</sys:String>
+    <sys:String x:Key="S.Kind.Apk">แอป Android</sys:String>
+    <sys:String x:Key="S.Kind.Asar">แพ็กเกจ ASAR</sys:String>
+    <sys:String x:Key="S.Kind.Sqlite">ฐานข้อมูล SQLite</sys:String>
+    <sys:String x:Key="S.Kind.Har">บันทึกเครือข่าย HAR</sys:String>
+    <sys:String x:Key="S.Kind.Wasm">WebAssembly</sys:String>
+
+    <sys:String x:Key="S.Time.Now">เมื่อสักครู่</sys:String>
+    <sys:String x:Key="S.Time.Min">{0} นาทีก่อน</sys:String>
+    <sys:String x:Key="S.Time.Hour">{0} ชม.ก่อน</sys:String>
+    <sys:String x:Key="S.Time.Day">{0} วันก่อน</sys:String>
+    <sys:String x:Key="S.Time.Month">{0} เดือนก่อน</sys:String>
+
+    <sys:String x:Key="S.Tools.Title">เครื่องมือแกะในเครื่องนี้</sys:String>
+    <sys:String x:Key="S.Tools.Recheck">ตรวจใหม่</sys:String>
+    <sys:String x:Key="S.Lvl.Checking">กำลังตรวจ</sys:String>
+    <sys:String x:Key="S.Lvl.Ok">พร้อม</sys:String>
+    <sys:String x:Key="S.Lvl.Warn">ควรแก้</sys:String>
+    <sys:String x:Key="S.Lvl.Bad">ต้องแก้</sys:String>
+    <sys:String x:Key="S.Lvl.Off">ไม่บังคับ</sys:String>
+
+    <sys:String x:Key="S.Tool.Msg.checking">กำลังตรวจ…</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.ok">พร้อมใช้ · ใช้รัน REA และงาน JS/Electron</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.old">เครื่องมี v{0} เก่าไป · ต้อง Node.js 22.19+ / 24.11+ / 26+ อัปเดตที่ nodejs.org</sys:String>
+    <sys:String x:Key="S.Tool.Msg.node.missing">ยังไม่พบ Node.js · ติดตั้งจาก nodejs.org (รุ่น 22.19+ / 24.11+ / 26+) แล้วเปิดโปรแกรมใหม่</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.ok">พร้อมทำงาน · {1} เครื่องมือวิเคราะห์</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.needNode">รอติดตั้ง Node.js ที่ใช้ได้ก่อน</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.timeout">REA ตอบช้าเกินไป · ตรวจอินเทอร์เน็ต (ครั้งแรกต้องดาวน์โหลด) แล้วกด “ตรวจใหม่”</sys:String>
+    <sys:String x:Key="S.Tool.Msg.rea.failed">เรียก REA ไม่สำเร็จ · ตรวจอินเทอร์เน็ตแล้วกด “ตรวจใหม่”</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.ok">พร้อม · ถอดไบนารีเป็นโค้ด C จำลองได้</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.noJava">ไบนารีเจาะลึก · ต้องมี JDK 21 ก่อน (เครื่องนี้ยังไม่มี Java)</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.needJdk21">ไบนารีเจาะลึก · ต้อง JDK 21 (เครื่องมี Java {0})</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.notSet">ไบนารีเจาะลึก · ยังไม่ได้ตั้ง GHIDRA_INSTALL_DIR (ต้อง Ghidra 12.1.x)</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ghidra.unknown">ยังตรวจไม่ได้ เพราะ REA ยังไม่พร้อม</sys:String>
+    <sys:String x:Key="S.Tool.Msg.jadx.ok">พร้อม · แกะแอป Android APK ได้</sys:String>
+    <sys:String x:Key="S.Tool.Msg.jadx.missing">Android APK · ยังไม่ติดตั้ง JADX</sys:String>
+    <sys:String x:Key="S.Tool.Msg.browser.ok">เว็บไซต์ · จับ network · ภาพหน้าจอ</sys:String>
+    <sys:String x:Key="S.Tool.Msg.browser.missing">ยังไม่พบ Chrome หรือ Edge · ต้องใช้กับงานเว็บ</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ida.ok">พร้อม · เชื่อม IDA ผ่านไลเซนส์ของคุณ</sys:String>
+    <sys:String x:Key="S.Tool.Msg.ida.optional">ใช้ไลเซนส์ของคุณเอง · Hopper ไม่มีบน Windows</sys:String>
+
+    <sys:String x:Key="S.Ask.Title">ลองถาม AI</sys:String>
+    <sys:String x:Key="S.Ask.Q1">ปุ่ม “ส่งออก PDF” ในแอปนี้ทำงานยังไง แล้วทำแบบนี้ให้แอปเรา</sys:String>
+    <sys:String x:Key="S.Ask.Q2">โปรแกรมนี้ขอสิทธิ์อะไรบ้าง ส่งข้อมูลไปที่ไหน</sys:String>
+    <sys:String x:Key="S.Ask.Q3">รุ่น 3.1 กับ 3.2 เปลี่ยนอะไรไปบ้าง</sys:String>
+    <sys:String x:Key="S.Ask.Open">เปิดผู้ช่วย AI</sys:String>
+
+    <sys:String x:Key="S.Notice.Added">เพิ่ม “{0}” แล้ว · ตรวจพบ: {1}</sys:String>
+    <sys:String x:Key="S.Notice.AddedUnknown">เพิ่ม “{0}” แล้ว แต่ยังไม่รู้จักชนิดไฟล์นี้</sys:String>
+    <sys:String x:Key="S.Notice.Partial">เพิ่มได้ {0} จาก {1} รายการ · รายการที่เหลือมีปัญหา: {2}</sys:String>
+    <sys:String x:Key="S.Notice.Dismiss">ปิด</sys:String>
+    <sys:String x:Key="S.Err.NotFound">ไม่พบไฟล์หรือโฟลเดอร์นี้ อาจถูกย้ายหรือลบไปแล้ว</sys:String>
+    <sys:String x:Key="S.Err.NoAccess">เปิดไฟล์นี้ไม่ได้ เพราะไม่มีสิทธิ์อ่าน ลองเลือกไฟล์อื่น หรือเปิดโปรแกรมด้วยสิทธิ์ที่เหมาะสม</sys:String>
+    <sys:String x:Key="S.Err.Generic">เพิ่มโปรเจกต์ไม่สำเร็จ ลองอีกครั้ง (รายละเอียดอยู่ในไฟล์บันทึกของโปรแกรม)</sys:String>
+
+    <sys:String x:Key="S.Soon.Title">กำลังจะมา</sys:String>
+    <sys:String x:Key="S.Soon.Body">หน้านี้กำลังพัฒนาอยู่ เร็วๆ นี้จะใช้งานได้</sys:String>
+    <sys:String x:Key="S.Page.Ai.Desc">ถามเรื่องซอฟต์แวร์ที่แกะ แล้วได้คำตอบพร้อมหลักฐานและสิ่งที่ยังไม่รู้</sys:String>
+    <sys:String x:Key="S.Page.Binary.Desc">ดูโค้ด C จำลอง แอสเซมบลี และใครเรียกใคร ของไฟล์ EXE/DLL</sys:String>
+    <sys:String x:Key="S.Page.Js.Desc">ดูแผนผังโมดูลและ IPC ของแอป Electron / JavaScript</sys:String>
+    <sys:String x:Key="S.Page.Android.Desc">ดูโครงสร้างและสิทธิ์ของแอป Android APK</sys:String>
+    <sys:String x:Key="S.Page.Dotnet.Desc">ดูคลาสและเมธอดของ .NET Assembly</sys:String>
+    <sys:String x:Key="S.Page.Web.Desc">ดูเว็บไซต์และการเรียกเครือข่ายของมัน</sys:String>
+    <sys:String x:Key="S.Page.Db.Desc">ดูตารางและข้อมูลในไฟล์ฐานข้อมูล เช่น SQLite</sys:String>
+    <sys:String x:Key="S.Page.Evidence.Desc">รวมหลักฐานที่เก็บไว้และเทียบความต่างระหว่างรุ่น</sys:String>
+    <sys:String x:Key="S.Page.Settings.Desc">ธีม ภาษา API key ไลเซนส์ และการอัปเดต</sys:String>
+</ResourceDictionary>

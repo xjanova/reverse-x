@@ -1,6 +1,14 @@
 <Application x:Class="ReverseX.App.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml">
-  <Application.Resources />
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <!-- ลำดับสำคัญ: [0]=palette, [1]=ข้อความ (ถูกสลับตอนรัน), [2]=สไตล์ -->
+        <ResourceDictionary Source="Theme/Palette.Night.xaml"/>
+        <ResourceDictionary Source="Resources/Strings.th.xaml"/>
+        <ResourceDictionary Source="Theme/Theme.xaml"/>
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
 </Application>
