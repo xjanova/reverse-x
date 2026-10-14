@@ -15,4 +15,10 @@ internal static class Dialogs
         var dlg = new OpenFolderDialog { Title = title };
         return dlg.ShowDialog() == true ? dlg.FolderName : null;
     }
+
+    public static string? SaveFile(string title, string filter, string fileName)
+    {
+        var dlg = new SaveFileDialog { Title = title, Filter = filter, FileName = fileName, OverwritePrompt = true };
+        return dlg.ShowDialog() == true ? dlg.FileName : null;
+    }
 }

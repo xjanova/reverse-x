@@ -119,6 +119,46 @@ internal static class ScreenshotMode
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 
+    /// <summary>Phase 5: AI page with the mock's sample conversation (no API call, temp key store) + no-key state + settings.</summary>
+    public static async Task RunPhase5Async(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "rx-shot5-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmpRoot);
+        var ai = new AiServices
+        {
+            Keys = new ReverseX.Core.Ai.ApiKeyStore(Path.Combine(tmpRoot, "apikey.bin")),
+            Prefs = new ReverseX.Core.Ai.AiPrefs(),
+            PrefsPath = Path.Combine(tmpRoot, "ai.json"),
+        };
+        var vm = new MainViewModel(new ProjectStore(Path.Combine(tmpRoot, "projects.json")), snapshots: new SnapshotStore(Path.Combine(tmpRoot, "projects")), ai: ai);
+        var win = new MainWindow(vm)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000, Top = 0, ShowInTaskbar = false, Width = 1280, Height = 800,
+        };
+        win.Show();
+        await Flush();
+
+        void Shoot(string name)
+        {
+            foreach (var theme in new[] { UiPrefs.Night, UiPrefs.Sky })
+            {
+                ThemeManager.Apply(theme, save: false);
+                win.UpdateLayout();
+                Save(win, Path.Combine(dir, $"phase5-{name}-{(theme == UiPrefs.Sky ? "sky" : "night")}.png"));
+            }
+            ThemeManager.Apply(UiPrefs.Night, save: false);
+        }
+
+        vm.Select("Ai"); await Flush(); Shoot("ai-nokey");
+        vm.Ai.LoadDemo(running: true); await Flush(); Shoot("ai-running");
+        vm.Ai.LoadDemo(running: false); await Flush(); Shoot("ai-proposal");
+        vm.Select("Settings"); await Flush(); Shoot("settings");
+        win.Close();
+        try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
+    }
+
     private static async Task Flush()
     {
         await Dispatcher.CurrentDispatcher.InvokeAsync(() => { }, DispatcherPriority.ContextIdle);

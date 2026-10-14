@@ -11,6 +11,8 @@
         <DataTemplate DataType="{x:Type vm:PlaceholderViewModel}"><views:PlaceholderPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:BinaryViewModel}"><views:BinaryPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:JsViewModel}"><views:JsPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AiViewModel}"><views:AiPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsPage/></DataTemplate>
 
         <!-- ป้ายหลักฐาน: เห็นจริง / อนุมาน / ยังไม่รู้ -->
         <DataTemplate DataType="{x:Type vm:EvidenceRow}">

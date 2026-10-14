@@ -152,6 +152,8 @@ public sealed class AnalysisRunner
         ct.ThrowIfCancellationRequested();
         Report(progress, "parse", 3, 3);
         var model = await Task.Run(() => ReaResultParser.ParseManaged(artifact, members), ct).ConfigureAwait(false);
+        if (model.Types.Count == 0 && model.MembersCoverage == "unavailable")
+            throw new AnalysisFailure(AnalysisFailureKind.TooLarge, string.Join(" ", model.MembersLimitations));
         if (model.Info.Name.Length == 0 && model.Types.Count == 0)
             throw new AnalysisFailure(AnalysisFailureKind.NotSupported, "no managed metadata");
         return model;

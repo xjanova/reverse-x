@@ -15,9 +15,10 @@ public sealed class MainViewModel : ObservableObject
     private bool _isThai = Loc.Current == UiPrefs.Thai;
 
     public MainViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null,
-        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null)
+        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null, AiServices? ai = null)
     {
         backend ??= new ReaAnalysisBackend();
+        ai ??= new AiServices();
         snapshots ??= new SnapshotStore();
         Nav = new[]
         {
@@ -40,6 +41,12 @@ public sealed class MainViewModel : ObservableObject
         Js = new JsViewModel(backend, snapshots, OpenPathAsync);
         _pages["Binary"] = Binary;
         _pages["Js"] = Js;
+        Ai = new AiViewModel(ai);
+        Settings = new SettingsViewModel(ai);
+        Settings.Changed += Ai.RefreshSettings;
+        Ai.GoSettingsRequested += () => Select("Settings");
+        _pages["Ai"] = Ai;
+        _pages["Settings"] = Settings;
         Home.OpenRequested += entry => _ = OpenEntryAsync(entry.Path, entry.Kind);
         _current = Home;
         Nav[0].IsSelected = true;
@@ -59,6 +66,8 @@ public sealed class MainViewModel : ObservableObject
     public HomeViewModel Home { get; }
     public BinaryViewModel Binary { get; }
     public JsViewModel Js { get; }
+    public AiViewModel Ai { get; }
+    public SettingsViewModel Settings { get; }
 
     /// <summary>Opens a path from a page's own picker: detects the kind, records it in recent projects, then shows the matching page.</summary>
     private async Task OpenPathAsync(string path)
@@ -70,6 +79,8 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Routes a project to its page and starts (or reloads) the analysis there. Kinds without a page yet stay on Overview.</summary>
     public async Task OpenEntryAsync(string path, FileKind kind)
     {
+        if (kind is FileKind.Pe or FileKind.DotNet or FileKind.Elf or FileKind.MachO or FileKind.Asar or FileKind.AppFolder or FileKind.Folder)
+            Ai.SetTarget(path, kind);
         switch (kind)
         {
             case FileKind.Pe or FileKind.DotNet or FileKind.Elf or FileKind.MachO:

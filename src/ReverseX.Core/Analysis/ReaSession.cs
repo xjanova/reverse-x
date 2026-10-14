@@ -18,6 +18,12 @@ public sealed class ReaSession : IReaToolCaller, IAsyncDisposable
         return await client.CallToolAsync(tool, args, timeout, ct).ConfigureAwait(false);
     }
 
+    public async Task<IReadOnlyList<ReaTool>> ListToolsAsync(CancellationToken ct)
+    {
+        var client = await EnsureAsync(ct).ConfigureAwait(false);
+        return await client.ListToolsAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task<ReaClient> EnsureAsync(CancellationToken ct)
     {
         if (_client is not null) return _client;

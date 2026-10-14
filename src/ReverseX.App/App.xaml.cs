@@ -15,6 +15,13 @@ public partial class App : Application
         Shutdown();
     }
 
+    private async Task RunPhase5Async(string dir)
+    {
+        try { await ScreenshotMode.RunPhase5Async(dir); }
+        catch (Exception ex) { AppPaths.Log("Phase 5 screenshot mode failed", ex); Console.Error.WriteLine(ex); }
+        Shutdown();
+    }
+
     private async Task RunPhase4Async(string dir, string[] files)
     {
         try { await ScreenshotMode.RunPhase4Async(dir, files); }
@@ -41,6 +48,7 @@ public partial class App : Application
         {
             var dir = e.Args[shot + 1];
             var empty = e.Args.Contains("--empty");
+            if (e.Args.Contains("--phase5")) { _ = RunPhase5Async(dir); return; }
             var p4 = Array.IndexOf(e.Args, "--phase4");
             if (p4 >= 0)
             {

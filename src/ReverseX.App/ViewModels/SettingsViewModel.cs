@@ -1,0 +1,132 @@
+using System.IO;
+using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Windows.Input;
+using ReverseX.App.Services;
+using ReverseX.Core;
+using ReverseX.Core.Ai;
+
+namespace ReverseX.App.ViewModels;
+
+public sealed class ModelOptionVm : ObservableObject
+{
+    private readonly SettingsViewModel _owner;
+    public ModelOptionVm(ClaudeModel m, SettingsViewModel owner) { Model = m; _owner = owner; }
+    public ClaudeModel Model { get; }
+    public string Display => Model.Display;
+    public string Price => Loc.Format("Set.Model.Price", Fmt(Model.Price.Input), Fmt(Model.Price.Output));
+    private static string Fmt(decimal d) => d.ToString("0.###", CultureInfo.InvariantCulture);
+    public bool IsSelected
+    {
+        get => _owner.SelectedModelId == Model.Id;
+        set { if (value) _owner.SelectedModelId = Model.Id; }
+    }
+    public void Refresh() { Raise(nameof(IsSelected)); Raise(nameof(Price)); }
+}
+
+/// <summary>Settings page: API key (stored with DPAPI), model, budget per question.</summary>
+public sealed class SettingsViewModel : ObservableObject
+{
+    private readonly AiServices _svc;
+    private string _keyNotice = "";
+    private bool _keyNoticeError;
+    private string _budgetText;
+    private bool _hasKey;
+    private string _maskedKey = "";
+
+    public SettingsViewModel(AiServices svc)
+    {
+        _svc = svc;
+        _budgetText = svc.Prefs.BudgetUsd.ToString("0.00", CultureInfo.InvariantCulture);
+        foreach (var m in AiModels.All) Models.Add(new ModelOptionVm(m, this));
+        DeleteKeyCommand = new RelayCommand(DeleteKey, () => _hasKey);
+        RefreshKeyState();
+        Loc.Changed += () => { foreach (var m in Models) m.Refresh(); Raise(nameof(KeyPathText)); Raise(nameof(SelectedPrice)); };
+    }
+
+    public event Action? Changed;
+
+    public ObservableCollection<ModelOptionVm> Models { get; } = new();
+    public ICommand DeleteKeyCommand { get; }
+
+    public bool HasKey { get => _hasKey; private set { if (Set(ref _hasKey, value)) Raise(nameof(HasNoKey)); } }
+    public bool HasNoKey => !_hasKey;
+    public string MaskedKey { get => _maskedKey; private set => Set(ref _maskedKey, value); }
+    public string KeyNotice { get => _keyNotice; private set { if (Set(ref _keyNotice, value)) Raise(nameof(HasKeyNotice)); } }
+    public bool HasKeyNotice => _keyNotice.Length > 0;
+    public bool KeyNoticeError { get => _keyNoticeError; private set => Set(ref _keyNoticeError, value); }
+    public string KeyPathText => Loc.Format("Set.Key.Where", Path.Combine(AppPaths.Root, "apikey.bin"));
+
+    public string SelectedModelId
+    {
+        get => _svc.Prefs.Model;
+        set
+        {
+            if (_svc.Prefs.Model == value) return;
+            _svc.Prefs.Model = value;
+            Persist();
+            foreach (var m in Models) m.Refresh();
+            Raise(nameof(SelectedModelId)); Raise(nameof(SelectedPrice));
+        }
+    }
+
+    public string SelectedPrice => Models.FirstOrDefault(m => m.IsSelected)?.Price ?? "";
+
+    public string BudgetText
+    {
+        get => _budgetText;
+        set
+        {
+            if (!Set(ref _budgetText, value)) return;
+            if (TryParseBudget(value, out var d)) { _svc.Prefs.BudgetUsd = d; Persist(); }
+            Raise(nameof(BudgetValid));
+        }
+    }
+    public bool BudgetValid => TryParseBudget(_budgetText, out _);
+
+    public static bool TryParseBudget(string? s, out decimal d) =>
+        decimal.TryParse(s?.Trim().TrimStart('$'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out d) && d >= 0.01m && d <= 1000m;
+
+    private void Persist()
+    {
+        _svc.Prefs.Save(_svc.PrefsPath);
+        Changed?.Invoke();
+    }
+
+    private void RefreshKeyState()
+    {
+        HasKey = _svc.Keys.HasKey;
+        MaskedKey = _hasKey && _svc.Keys.Load() is { } k ? ApiKeyStore.Mask(k) : "";
+    }
+
+    /// <summary>The page hands over the PasswordBox text; it is stored encrypted and the box is cleared by the caller.</summary>
+    public void SaveKey(string? key)
+    {
+        key = key?.Trim() ?? "";
+        if (key.Length == 0) { Notice(Loc.Get("Set.Key.Empty"), true); return; }
+        if (!key.StartsWith("sk-ant-", StringComparison.Ordinal)) { Notice(Loc.Get("Set.Key.Format"), true); return; }
+        try
+        {
+            _svc.Keys.Save(key);
+        }
+        catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            AppPaths.Log("Could not store API key"); // no key material in the log
+            Notice(Loc.Get("Set.Key.SaveFailed"), true);
+            return;
+        }
+        RefreshKeyState();
+        Notice(Loc.Get("Set.Key.Saved"), false);
+        Changed?.Invoke();
+    }
+
+    private void DeleteKey()
+    {
+        _svc.Keys.Delete();
+        RefreshKeyState();
+        Notice(Loc.Get("Set.Key.Deleted"), false);
+        Changed?.Invoke();
+    }
+
+    private void Notice(string text, bool error) { KeyNotice = text; KeyNoticeError = error; }
+}
