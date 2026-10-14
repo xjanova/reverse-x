@@ -152,8 +152,11 @@ public sealed class AnalysisRunner
         ct.ThrowIfCancellationRequested();
         Report(progress, "parse", 3, 3);
         var model = await Task.Run(() => ReaResultParser.ParseManaged(artifact, members), ct).ConfigureAwait(false);
-        if (model.Types.Count == 0 && model.MembersCoverage == "unavailable")
-            throw new AnalysisFailure(AnalysisFailureKind.TooLarge, string.Join(" ", model.MembersLimitations));
+        if (model.Types.Count == 0 && string.Equals(model.MembersCoverage, "unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            var why = string.Join(" ", model.MembersLimitations);
+            throw new AnalysisFailure(AnalysisFailureKind.TooLarge, why.Length > 0 ? why : "REA could not read the member metadata (coverage: unavailable)");
+        }
         if (model.Info.Name.Length == 0 && model.Types.Count == 0)
             throw new AnalysisFailure(AnalysisFailureKind.NotSupported, "no managed metadata");
         return model;

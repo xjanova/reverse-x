@@ -40,6 +40,8 @@
     <sys:String x:Key="S.Drop.Active">Release to add as a project</sys:String>
     <sys:String x:Key="S.Btn.PickFile">Choose file</sys:String>
     <sys:String x:Key="S.Btn.PickFolder">Choose folder</sys:String>
+    <sys:String x:Key="S.Play.Hint">Paste a Google Play link…</sys:String>
+    <sys:String x:Key="S.Btn.Fetch">Download &amp; unpack</sys:String>
     <sys:String x:Key="S.Dlg.PickFile">Choose a file to analyse</sys:String>
     <sys:String x:Key="S.Dlg.AllFiles">All files</sys:String>
     <sys:String x:Key="S.Dlg.PickFolder">Choose an app folder to analyse</sys:String>
@@ -120,6 +122,13 @@
     <sys:String x:Key="S.Notice.Dismiss">Close</sys:String>
     <sys:String x:Key="S.Err.NotFound">That file or folder was not found. It may have been moved or deleted.</sys:String>
     <sys:String x:Key="S.Err.NoAccess">Cannot open this file because you have no read permission. Pick another file or run the app with suitable rights.</sys:String>
+    <sys:String x:Key="S.Notice.Fetching">Downloading {0}… {1}</sys:String>
+    <sys:String x:Key="S.Notice.Fetched">Downloaded and unpacked {0}</sys:String>
+    <sys:String x:Key="S.Err.PlayBadLink">That is not a Google Play app link (expected …/store/apps/details?id=package.name).</sys:String>
+    <sys:String x:Key="S.Err.PlayNotFound">The mirror does not have this app (paid, region-locked or removed apps cannot be fetched).</sys:String>
+    <sys:String x:Key="S.Err.PlayBlocked">The download site refused the request. Please try again later.</sys:String>
+    <sys:String x:Key="S.Err.PlayNetwork">Download failed — check your internet connection and try again.</sys:String>
+    <sys:String x:Key="S.Err.PlayNotApk">The downloaded file is not a valid APK.</sys:String>
     <sys:String x:Key="S.Err.Generic">Could not add the project. Please try again (details are in the app log).</sys:String>
 
     <sys:String x:Key="S.Soon.Title">Coming soon</sys:String>

@@ -164,6 +164,20 @@
                                 <Button Style="{StaticResource Btn.Aqua}" Content="{DynamicResource S.Btn.PickFile}" Margin="3" Click="OnPickFile"/>
                                 <Button Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Btn.PickFolder}" Margin="3" Click="OnPickFolder"/>
                             </WrapPanel>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Style="{StaticResource SearchBox}" Height="32" Tag="{DynamicResource S.Play.Hint}" MaxLength="500"
+                                         Text="{Binding PlayLink, UpdateSourceTrigger=PropertyChanged}">
+                                    <TextBox.InputBindings>
+                                        <KeyBinding Key="Return" Command="{Binding FetchCommand}"/>
+                                    </TextBox.InputBindings>
+                                </TextBox>
+                                <Button Grid.Column="1" Style="{StaticResource Btn.Aqua}" Content="{DynamicResource S.Btn.Fetch}" Margin="6,0,0,0"
+                                        Command="{Binding FetchCommand}"/>
+                            </Grid>
                         </StackPanel>
                     </Grid>
                 </Grid>

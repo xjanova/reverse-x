@@ -154,3 +154,18 @@
 - ยังไม่มีเทสต์ครอบ path `..`, path แบบ array และ path ที่มี `:` ใน `GuardPaths`
 - ไม่ตาม symlink/junction ในโฟลเดอร์ผู้ใช้ (ผู้ใช้ยืนยัน diff ก่อนเขียนอยู่แล้ว)
 - ยังไม่ได้ลองเรียก Claude API จริง (มีแอตทริบิวต์ `RealApiFact` สำหรับเทสต์จริง ข้ามถ้าไม่มี key)
+
+
+---
+
+## เฟส 6 (ส่วนแรก) — โหลดแอปจาก Google Play
+
+### ทำอะไร
+- `ReverseX.Core/Download/`: `PlayLink` แปลงลิงก์ Play (play.google.com / market.android.com / market://) เป็น package id ที่ปลอดภัยใช้เป็นชื่อโฟลเดอร์, `ApkFetcher` โหลด APK/XAPK พร้อม progress, timeout แบบ inactivity, ตรวจ zip magic, แกะ base APK จาก XAPK
+- `HomeViewModel` + `HomePage.xaml`: ช่องวางลิงก์และปุ่มโหลด, กันกดซ้ำ, ข้อความ error ภาษาไทย/อังกฤษ
+- เทสต์ใหม่ `Phase6Tests.cs`; build ผ่าน, เทสต์ 123 ผ่าน 1 ข้าม
+
+### ข้อจำกัดที่ยังเหลือ
+- ไม่มีเพดานขนาดไฟล์ที่โหลด/แกะ และยังไม่มีปุ่มยกเลิกบนหน้าจอ
+- ยังไม่ได้ลองโหลดจากอินเทอร์เน็ตจริงผ่านตัวแอป
+- ไลเซนส์/อัปเดต/release ของเฟส 6 ยังไม่ทำ

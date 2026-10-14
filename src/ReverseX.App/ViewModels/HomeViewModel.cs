@@ -1,8 +1,10 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Net.Http;
 using System.Windows.Input;
 using ReverseX.App.Services;
 using ReverseX.Core;
+using ReverseX.Core.Download;
 using ReverseX.Core.Files;
 using ReverseX.Core.Projects;
 using ReverseX.Core.Tools;
@@ -21,10 +23,15 @@ public sealed class HomeViewModel : ObservableObject
     private bool _noticeIsError;
     private bool _checkingTools;
     private CancellationTokenSource? _toolCts;
+    private readonly IApkFetcher _fetcher;
+    private string _playLink = "";
+    private bool _fetching;
 
-    public HomeViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null)
+    public HomeViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null, IApkFetcher? fetcher = null)
     {
         _store = store;
+        _fetcher = fetcher ?? new ApkFetcher();
+        FetchCommand = new RelayCommand(_ => { _ = FetchFromPlayAsync(); }, _ => !_fetching);
         _toolCheck = toolCheck ?? ToolCheckService.CheckAsync;
         foreach (var t in ToolStatusMapper.Checking()) Tools.Add(new ToolItemViewModel(t));
         RecheckCommand = new RelayCommand(_ => { _ = CheckToolsAsync(); }, _ => !_checkingTools);
@@ -43,6 +50,7 @@ public sealed class HomeViewModel : ObservableObject
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = new();
     public ObservableCollection<ToolItemViewModel> Tools { get; } = new();
 
+    public ICommand FetchCommand { get; }
     public ICommand RecheckCommand { get; }
     public ICommand RemoveCommand { get; }
     public ICommand DismissNoticeCommand { get; }
@@ -53,6 +61,51 @@ public sealed class HomeViewModel : ObservableObject
     {
         get => _search;
         set { if (Set(ref _search, value)) ApplyFilter(); }
+    }
+
+    public string PlayLink { get => _playLink; set => Set(ref _playLink, value); }
+
+    /// <summary>Downloads the app behind a Google Play link, unpacks it, and opens it. Never throws.</summary>
+    public async Task FetchFromPlayAsync()
+    {
+        if (_fetching) return;
+        var pkg = Core.Download.PlayLink.TryParse(_playLink);
+        if (pkg is null) { SetNotice("Err.PlayBadLink", error: true); return; }
+
+        _fetching = true;
+        CommandManager.InvalidateRequerySuggested();
+        SetNotice("Notice.Fetching", false, pkg, "");
+        var progress = new Progress<FetchProgress>(p =>
+            { if (_fetching) SetNotice("Notice.Fetching", false, pkg, p.Total is > 0 ? $"{p.Received * 100 / p.Total}%" : ByteSize.Format(p.Received)); });
+        try
+        {
+            var app = await Task.Run(() => _fetcher.FetchAsync(pkg, progress, CancellationToken.None)).ConfigureAwait(true);
+            await AddPathsAsync(new[] { app.ApkPath }).ConfigureAwait(true);
+            await AddPathsAsync(new[] { app.UnpackedDir }).ConfigureAwait(true);
+            SetNotice("Notice.Fetched", false, pkg);
+            PlayLink = "";
+        }
+        catch (ApkFetchException ex)
+        {
+            AppPaths.Log("Play fetch failed: " + pkg, ex);
+            SetNotice(ex.Kind switch
+            {
+                ApkFetchError.NotFound => "Err.PlayNotFound",
+                ApkFetchError.Blocked => "Err.PlayBlocked",
+                ApkFetchError.NotApk => "Err.PlayNotApk",
+                _ => "Err.PlayNetwork",
+            }, error: true);
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Play fetch failed: " + pkg, ex);
+            SetNotice("Err.PlayNetwork", error: true);
+        }
+        finally
+        {
+            _fetching = false;
+            CommandManager.InvalidateRequerySuggested();
+        }
     }
 
     public bool IsDragging { get => _dragging; set => Set(ref _dragging, value); }

@@ -40,6 +40,8 @@
     <sys:String x:Key="S.Drop.Active">ปล่อยเมาส์เพื่อเพิ่มเป็นโปรเจกต์</sys:String>
     <sys:String x:Key="S.Btn.PickFile">เลือกไฟล์</sys:String>
     <sys:String x:Key="S.Btn.PickFolder">เลือกโฟลเดอร์</sys:String>
+    <sys:String x:Key="S.Play.Hint">วางลิงก์ Google Play ที่นี่…</sys:String>
+    <sys:String x:Key="S.Btn.Fetch">โหลดและแกะ</sys:String>
     <sys:String x:Key="S.Dlg.PickFile">เลือกไฟล์ที่ต้องการแกะ</sys:String>
     <sys:String x:Key="S.Dlg.AllFiles">ไฟล์ทั้งหมด</sys:String>
     <sys:String x:Key="S.Dlg.PickFolder">เลือกโฟลเดอร์แอปที่ต้องการแกะ</sys:String>
@@ -120,6 +122,13 @@
     <sys:String x:Key="S.Notice.Dismiss">ปิด</sys:String>
     <sys:String x:Key="S.Err.NotFound">ไม่พบไฟล์หรือโฟลเดอร์นี้ อาจถูกย้ายหรือลบไปแล้ว</sys:String>
     <sys:String x:Key="S.Err.NoAccess">เปิดไฟล์นี้ไม่ได้ เพราะไม่มีสิทธิ์อ่าน ลองเลือกไฟล์อื่น หรือเปิดโปรแกรมด้วยสิทธิ์ที่เหมาะสม</sys:String>
+    <sys:String x:Key="S.Notice.Fetching">กำลังโหลด {0}… {1}</sys:String>
+    <sys:String x:Key="S.Notice.Fetched">โหลดและแกะ {0} เรียบร้อยแล้ว</sys:String>
+    <sys:String x:Key="S.Err.PlayBadLink">ลิงก์นี้ไม่ใช่ลิงก์แอปบน Google Play (ต้องเป็นรูปแบบ …/store/apps/details?id=ชื่อแพ็กเกจ)</sys:String>
+    <sys:String x:Key="S.Err.PlayNotFound">เว็บสำรองไม่มีแอปนี้ (แอปที่ต้องซื้อ ล็อกประเทศ หรือถูกลบแล้วจะโหลดไม่ได้)</sys:String>
+    <sys:String x:Key="S.Err.PlayBlocked">เว็บที่ใช้โหลดปฏิเสธคำขอ ลองใหม่ภายหลัง</sys:String>
+    <sys:String x:Key="S.Err.PlayNetwork">โหลดไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง</sys:String>
+    <sys:String x:Key="S.Err.PlayNotApk">ไฟล์ที่โหลดมาไม่ใช่ APK ที่ถูกต้อง</sys:String>
     <sys:String x:Key="S.Err.Generic">เพิ่มโปรเจกต์ไม่สำเร็จ ลองอีกครั้ง (รายละเอียดอยู่ในไฟล์บันทึกของโปรแกรม)</sys:String>
 
     <sys:String x:Key="S.Soon.Title">กำลังจะมา</sys:String>
