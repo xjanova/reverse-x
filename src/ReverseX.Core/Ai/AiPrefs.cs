@@ -7,7 +7,13 @@ public sealed class AiPrefs
 {
     public const decimal DefaultBudgetUsd = 1.00m;
 
+    public string Provider { get; set; } = AiProviders.DefaultId;
+    /// <summary>Claude model id (used when Provider is anthropic).</summary>
     public string Model { get; set; } = AiModels.DefaultId;
+    /// <summary>Model id typed by the user for every other vendor.</summary>
+    public string? CustomModel { get; set; }
+    /// <summary>Endpoint override for custom / local providers.</summary>
+    public string? CustomBaseUrl { get; set; }
     public decimal BudgetUsd { get; set; } = DefaultBudgetUsd;
     public string? OwnProjectFolder { get; set; }
 
@@ -21,6 +27,7 @@ public sealed class AiPrefs
             if (!File.Exists(path)) return new AiPrefs();
             var p = JsonSerializer.Deserialize<AiPrefs>(File.ReadAllText(path)) ?? new AiPrefs();
             if (!AiModels.IsKnown(p.Model)) p.Model = AiModels.DefaultId;
+            if (!AiProviders.IsKnown(p.Provider)) p.Provider = AiProviders.DefaultId;
             if (p.BudgetUsd <= 0 || p.BudgetUsd > 1000) p.BudgetUsd = DefaultBudgetUsd;
             return p;
         }

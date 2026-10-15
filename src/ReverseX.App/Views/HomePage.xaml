@@ -168,6 +168,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBox Style="{StaticResource SearchBox}" Height="32" Tag="{DynamicResource S.Play.Hint}" MaxLength="500"
                                          Text="{Binding PlayLink, UpdateSourceTrigger=PropertyChanged}">
@@ -177,6 +178,8 @@
                                 </TextBox>
                                 <Button Grid.Column="1" Style="{StaticResource Btn.Aqua}" Content="{DynamicResource S.Btn.Fetch}" Margin="6,0,0,0"
                                         Command="{Binding FetchCommand}"/>
+                                <Button Grid.Column="2" Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Btn.CancelFetch}" Margin="6,0,0,0"
+                                        Command="{Binding CancelFetchCommand}" Visibility="{Binding IsFetching, Converter={StaticResource B2V}}"/>
                             </Grid>
                         </StackPanel>
                     </Grid>

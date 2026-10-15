@@ -17,7 +17,7 @@ public sealed record EvidenceRow(EvidenceLevel Level, string Badge, string Text)
 public enum BinTab { Cil, Meta, Go, Native }
 
 /// <summary>The binary page: .NET assemblies (real today), native files (engine needed), Go build info.</summary>
-public sealed class BinaryViewModel : AnalysisPageBase
+public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 {
     public const string GuideUrl = "https://github.com/morluto/rea#readme";
     private const int MaxCilRows = 3000;
@@ -56,6 +56,10 @@ public sealed class BinaryViewModel : AnalysisPageBase
     protected override string TitleKey => "Bin.Title";
     protected override bool Accepts(AnalysisKind saved, FileKind target) =>
         target == FileKind.DotNet ? saved == AnalysisKind.DotNet : saved == AnalysisKind.Native;
+
+    public string EvidenceSourceName => Loc.Get("Nav.Binary");
+    public string? EvidenceTarget => IsReady ? TargetPath : null;
+    public IReadOnlyList<EvidenceRow> EvidenceItems => Evidence;
 
     public ICommand PickCommand { get; }
     public ICommand OpenGuideCommand { get; }

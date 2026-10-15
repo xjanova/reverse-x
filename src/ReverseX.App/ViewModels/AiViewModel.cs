@@ -21,7 +21,21 @@ public sealed class AiServices
     public Func<IModelStreamer>? StreamerFactory { get; init; }
     public Func<string, FileKind, CancellationToken, Task<ReaToolSession>>? ToolFactory { get; init; }
 
-    public IModelStreamer CreateStreamer() => StreamerFactory?.Invoke() ?? new AnthropicTurnStreamer(() => Keys.Load());
+    public AiProvider Provider => AiProviders.Get(Prefs.Provider);
+    /// <summary>The key store of the selected vendor (each vendor keeps its own encrypted key).</summary>
+    public ApiKeyStore ActiveKeys => Keys.ForProvider(Provider.Id);
+    /// <summary>Ready to ask: a key is stored, or the vendor (local server) needs none.</summary>
+    public bool Ready => !Provider.NeedsKey || ActiveKeys.HasKey;
+
+    public IModelStreamer CreateStreamer()
+    {
+        if (StreamerFactory is not null) return StreamerFactory();
+        var p = Provider;
+        var keys = ActiveKeys;
+        return p.IsAnthropic
+            ? new AnthropicTurnStreamer(() => keys.Load())
+            : new OpenAiCompatTurnStreamer(AiProviders.BaseUrl(Prefs), () => keys.Load(), p.NeedsKey, p.UsesMaxCompletionTokens);
+    }
     public Task<ReaToolSession> StartTools(string path, FileKind kind, CancellationToken ct) =>
         ToolFactory is not null ? ToolFactory(path, kind, ct) : ReaToolSession.StartAsync(path, kind, ct);
 }
@@ -48,7 +62,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     public AiViewModel(AiServices svc)
     {
         _svc = svc;
-        _hasKey = svc.Keys.HasKey;
+        _hasKey = svc.Ready;
         SendCommand = new RelayCommand(() => _ = SendAsync(null), () => !_isRunning);
         StopCommand = new RelayCommand(() => _cts?.Cancel(), () => _isRunning);
         SuggestCommand = new RelayCommand(o => _ = SendAsync(o as string), _ => !_isRunning);
@@ -100,7 +114,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     public string TargetName { get => _targetName; private set => Set(ref _targetName, value); }
     public bool HasTarget => _targetPath is not null;
     public string TargetChip => _targetPath is null ? Loc.Get("Ai.NoTarget") : $"{TargetName} · {Loc.Get("Kind." + _targetKind)}";
-    public string ModelName => AiModels.Get(_svc.Prefs.Model).Display;
+    public string ModelName => _svc.Provider.IsAnthropic ? AiModels.Get(_svc.Prefs.Model).Display : AiProviders.ModelId(_svc.Prefs);
     public string EvidencePill => Loc.Format("Ai.Pill.Evidence", Evidence.Count, Unknowns.Count);
     public string CostText => Loc.Format("Ai.Cost", CostCalculator.Format(_runCost), CostCalculator.Format(_svc.Prefs.BudgetUsd), CostCalculator.Format(_sessionCost));
 
@@ -146,7 +160,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Called when settings changed (key saved/removed, model, budget).</summary>
     public void RefreshSettings()
     {
-        HasKey = _svc.Keys.HasKey;
+        HasKey = _svc.Ready;
         Raise(nameof(ShowWelcome));
         RefreshText();
     }
@@ -245,7 +259,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
             var agent = new AiAgent(_svc.CreateStreamer(), box, e => Post(() => Handle(e)));
             var opt = new AgentOptions
             {
-                ModelId = _svc.Prefs.Model,
+                ModelId = AiProviders.ModelId(_svc.Prefs),
                 BudgetUsd = _svc.Prefs.BudgetUsd,
                 TargetDescription = _targetPath is null ? "" : $"{TargetName} ({Loc.Get("Kind." + _targetKind)}) at {_targetPath}",
                 HasOwnProject = _ownFolder is not null,

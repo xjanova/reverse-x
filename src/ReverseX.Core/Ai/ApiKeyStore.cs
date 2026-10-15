@@ -17,6 +17,13 @@ public sealed class ApiKeyStore
 
     public ApiKeyStore(string? file = null) => _file = file ?? Path.Combine(AppPaths.Root, "apikey.bin");
 
+    /// <summary>The store for another vendor's key: same folder, file apikey-{provider}.bin (Anthropic keeps the original file).</summary>
+    public ApiKeyStore ForProvider(string providerId) =>
+        providerId == AiProviders.DefaultId ? this
+        : new ApiKeyStore(Path.Combine(Path.GetDirectoryName(_file)!, "apikey-" + providerId + ".bin"));
+
+    public string FilePath => _file;
+
     public bool HasKey => File.Exists(_file);
 
     public void Save(string key)

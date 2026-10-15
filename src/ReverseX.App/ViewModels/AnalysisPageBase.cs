@@ -80,6 +80,14 @@ public abstract class AnalysisPageBase : ObservableObject
     protected abstract string TitleKey { get; }
     protected abstract bool Accepts(AnalysisKind saved, FileKind target);
     protected AnalysisSnapshot? Snapshot => _snapshot;
+    /// <summary>Separate snapshot file for pages that read the same source differently (see SnapshotStore.FileFor).</summary>
+    protected virtual string? SnapshotSlot => null;
+
+    protected virtual Task<AnalysisSnapshot> AnalyzeCoreAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct) =>
+        Backend.AnalyzeAsync(path, kind, progress, ct);
+
+    protected virtual string ErrorKeyFor(Exception ex) =>
+        ex is AnalysisFailure f ? "Err." + (f.Kind == AnalysisFailureKind.Generic ? "Analysis" : f.Kind.ToString()) : "Err.Analysis";
 
     public string? TargetPath { get; private set; }
     public FileKind TargetKind { get; private set; }
@@ -143,7 +151,7 @@ public abstract class AnalysisPageBase : ObservableObject
 
         if (!force)
         {
-            var saved = await Task.Run(() => _snapshots.TryLoad(path)).ConfigureAwait(true);
+            var saved = await Task.Run(() => _snapshots.TryLoad(path, SnapshotSlot)).ConfigureAwait(true);
             if (id != _runId) return;
             if (saved is not null && Accepts(saved.Kind, TargetKind))
             {
@@ -175,9 +183,9 @@ public abstract class AnalysisPageBase : ObservableObject
 
         try
         {
-            var snap = await Task.Run(() => Backend.AnalyzeAsync(path, TargetKind, progress, cts.Token)).ConfigureAwait(true);
+            var snap = await Task.Run(() => AnalyzeCoreAsync(path, TargetKind, progress, cts.Token)).ConfigureAwait(true);
             if (id != _runId) return;
-            try { await Task.Run(() => _snapshots.Save(snap)).ConfigureAwait(true); }
+            try { await Task.Run(() => _snapshots.Save(snap, SnapshotSlot)).ConfigureAwait(true); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 AppPaths.Log("Could not save snapshot for " + path, ex);
@@ -197,7 +205,7 @@ public abstract class AnalysisPageBase : ObservableObject
         {
             if (id != _runId) return;
             AppPaths.Log("Analysis failed: " + path, ex);
-            ErrorText = Loc.Get(ex is AnalysisFailure f ? "Err." + (f.Kind == AnalysisFailureKind.Generic ? "Analysis" : f.Kind.ToString()) : "Err.Analysis");
+            ErrorText = Loc.Get(ErrorKeyFor(ex));
             State = RunState.Failed;
         }
         finally

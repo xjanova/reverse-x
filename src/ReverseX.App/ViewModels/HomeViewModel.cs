@@ -26,12 +26,14 @@ public sealed class HomeViewModel : ObservableObject
     private readonly IApkFetcher _fetcher;
     private string _playLink = "";
     private bool _fetching;
+    private CancellationTokenSource? _fetchCts;
 
     public HomeViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null, IApkFetcher? fetcher = null)
     {
         _store = store;
         _fetcher = fetcher ?? new ApkFetcher();
         FetchCommand = new RelayCommand(_ => { _ = FetchFromPlayAsync(); }, _ => !_fetching);
+        CancelFetchCommand = new RelayCommand(_ => _fetchCts?.Cancel(), _ => _fetching);
         _toolCheck = toolCheck ?? ToolCheckService.CheckAsync;
         foreach (var t in ToolStatusMapper.Checking()) Tools.Add(new ToolItemViewModel(t));
         RecheckCommand = new RelayCommand(_ => { _ = CheckToolsAsync(); }, _ => !_checkingTools);
@@ -51,6 +53,8 @@ public sealed class HomeViewModel : ObservableObject
     public ObservableCollection<ToolItemViewModel> Tools { get; } = new();
 
     public ICommand FetchCommand { get; }
+    public ICommand CancelFetchCommand { get; }
+    public bool IsFetching => _fetching;
     public ICommand RecheckCommand { get; }
     public ICommand RemoveCommand { get; }
     public ICommand DismissNoticeCommand { get; }
@@ -73,13 +77,15 @@ public sealed class HomeViewModel : ObservableObject
         if (pkg is null) { SetNotice("Err.PlayBadLink", error: true); return; }
 
         _fetching = true;
+        var cts = _fetchCts = new CancellationTokenSource();
+        Raise(nameof(IsFetching));
         CommandManager.InvalidateRequerySuggested();
         SetNotice("Notice.Fetching", false, pkg, "");
         var progress = new Progress<FetchProgress>(p =>
-            { if (_fetching) SetNotice("Notice.Fetching", false, pkg, p.Total is > 0 ? $"{p.Received * 100 / p.Total}%" : ByteSize.Format(p.Received)); });
+            { if (_fetching) SetNotice("Notice.Fetching", false, pkg, p.Total is > 0 ? $"{Math.Min(100L, p.Received * 100 / p.Total.Value)}%" : ByteSize.Format(p.Received)); });
         try
         {
-            var app = await Task.Run(() => _fetcher.FetchAsync(pkg, progress, CancellationToken.None)).ConfigureAwait(true);
+            var app = await Task.Run(() => _fetcher.FetchAsync(pkg, progress, cts.Token)).ConfigureAwait(true);
             await AddPathsAsync(new[] { app.ApkPath }).ConfigureAwait(true);
             await AddPathsAsync(new[] { app.UnpackedDir }).ConfigureAwait(true);
             SetNotice("Notice.Fetched", false, pkg);
@@ -93,8 +99,13 @@ public sealed class HomeViewModel : ObservableObject
                 ApkFetchError.NotFound => "Err.PlayNotFound",
                 ApkFetchError.Blocked => "Err.PlayBlocked",
                 ApkFetchError.NotApk => "Err.PlayNotApk",
+                ApkFetchError.TooLarge => "Err.PlayTooLarge",
                 _ => "Err.PlayNetwork",
             }, error: true);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            SetNotice("Notice.FetchCancelled", false, pkg);
         }
         catch (Exception ex)
         {
@@ -104,6 +115,9 @@ public sealed class HomeViewModel : ObservableObject
         finally
         {
             _fetching = false;
+            _fetchCts = null;
+            cts.Dispose();
+            Raise(nameof(IsFetching));
             CommandManager.InvalidateRequerySuggested();
         }
     }

@@ -8,7 +8,16 @@ public static partial class PlayLink
     [GeneratedRegex(@"^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\z")]
     private static partial Regex PackageRegex();
 
-    public static bool IsValidPackageId(string s) => s.Length <= 200 && PackageRegex().IsMatch(s);
+    // Windows treats "con.x.apk" etc. as a device name, so the id (used as a file/folder name) must not start with one.
+    private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "con", "prn", "aux", "nul",
+        "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
+        "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+    };
+
+    public static bool IsValidPackageId(string s) =>
+        s.Length <= 200 && PackageRegex().IsMatch(s) && !ReservedNames.Contains(s[..s.IndexOf('.')]);
 
     /// <summary>Returns the package id, or null when the text is not a recognisable Play link / package name.</summary>
     public static string? TryParse(string? text)

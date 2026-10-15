@@ -22,6 +22,8 @@ public static class AiModels
     public static ClaudeModel Get(string? id) =>
         All.FirstOrDefault(m => m.Id == id) ?? All[0];
 
+    public static ClaudeModel? Find(string? id) => All.FirstOrDefault(m => m.Id == id);
+
     public static bool IsKnown(string? id) => All.Any(m => m.Id == id);
 }
 

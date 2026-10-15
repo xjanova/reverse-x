@@ -54,6 +54,27 @@ public class PaletteTests
         Assert.Empty(th.Except(en));
         Assert.Empty(en.Except(th));
     }
+
+    /// <summary>Every insight code and progress step the local readers emit must have UI text, or the user sees a raw key.</summary>
+    [Fact]
+    public void LocalReader_InsightCodesAndSteps_HaveStrings()
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var keys = XDocument.Load(System.IO.Path.Combine(AppDir(), "Resources", "Strings.en.xaml")).Root!.Elements()
+            .Select(e => (string?)e.Attribute(x + "Key")).Where(k => k is not null).ToHashSet();
+        var src = string.Concat(Directory.GetFiles(System.IO.Path.Combine(AppDir(), "..", "ReverseX.Core", "Analysis", "Local"), "*.cs").Select(File.ReadAllText));
+
+        var needed = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(src, "Insight\\.Of\\(\"([A-Za-z]+)\"(\\s*\\+\\s*cat)?"))
+            needed.AddRange(m.Groups[2].Success
+                ? new[] { "Process", "Reflection", "Network", "Registry", "Serialization", "Debugger" }.Select(c => "S.Ins." + m.Groups[1].Value + c)
+                : new[] { "S.Ins." + m.Groups[1].Value });
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(src, "AnalysisProgress\\(\"([a-z.]+)\""))
+            needed.Add("S.Step." + m.Groups[1].Value);
+
+        Assert.True(needed.Count > 40);
+        Assert.Empty(needed.Distinct().Where(k => !keys.Contains(k)));
+    }
 }
 
 public class FileKindDetectorTests

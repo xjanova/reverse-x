@@ -58,6 +58,53 @@ internal static class ScreenshotMode
     }
 
     /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe].</summary>
+    /// <summary>--phase8 &lt;files…&gt;: opens each file (APK / SQLite / HAR / WASM / .NET) and shoots the Insight pages and the Evidence page.</summary>
+    public static async Task RunPhase8Async(string dir, string[] files)
+    {
+        Directory.CreateDirectory(dir);
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "rx-shot8-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmpRoot);
+        var vm = new MainViewModel(new ProjectStore(Path.Combine(tmpRoot, "projects.json")), snapshots: new SnapshotStore(Path.Combine(tmpRoot, "projects")));
+        var win = new MainWindow(vm)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000, Top = 0, ShowInTaskbar = false, Width = 1280, Height = 800,
+        };
+        win.Show();
+        await Flush();
+
+        void Shoot(string name)
+        {
+            foreach (var theme in new[] { UiPrefs.Night, UiPrefs.Sky })
+            {
+                ThemeManager.Apply(theme, save: false);
+                win.UpdateLayout();
+                Save(win, Path.Combine(dir, $"phase8-{name}-{(theme == UiPrefs.Sky ? "sky" : "night")}.png"));
+            }
+            ThemeManager.Apply(UiPrefs.Night, save: false);
+        }
+
+        vm.Select("Android"); await Flush(); Shoot("android-empty");
+        vm.Select("Evidence"); await Flush(); Shoot("evidence-empty");
+
+        foreach (var f in files)
+        {
+            await vm.OpenEntryAsync(f, FileKindDetector.Detect(f).Kind);
+            var pages = new[] { ("android", vm.Android), ("web", vm.Web), ("db", vm.Db), ("dotnet", vm.Dotnet) };
+            var until = DateTime.UtcNow.AddMinutes(4);
+            while (pages.Any(p => p.Item2.State == RunState.Running) && DateTime.UtcNow < until) await Task.Delay(300);
+            await Flush();
+            foreach (var (name, page) in pages.Where(p => p.Item2.TargetPath == f))
+            {
+                vm.Select(page.Section.Key); await Flush();
+                Shoot(name + "-" + Path.GetExtension(f).TrimStart('.'));
+            }
+        }
+        vm.Select("Evidence"); await Flush(); Shoot("evidence");
+        win.Close();
+        try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
+    }
+
     public static async Task RunPhase4Async(string dir, string[] files)
     {
         Directory.CreateDirectory(dir);

@@ -11,7 +11,7 @@ public sealed record FlowNode(string Glyph, string Title, string Sub, bool IsFir
 public sealed record ModuleRow(string Path, string Name, string Dir, string Kind, bool IsAsset);
 
 /// <summary>The JS / Electron page: summary cards, renderer → preload → IPC → main flow, paged module list.</summary>
-public sealed class JsViewModel : AnalysisPageBase
+public sealed class JsViewModel : AnalysisPageBase, IEvidenceSource
 {
     public const int PageSize = 40;
 
@@ -45,6 +45,10 @@ public sealed class JsViewModel : AnalysisPageBase
 
     protected override string TitleKey => "Js.Title";
     protected override bool Accepts(AnalysisKind saved, FileKind target) => saved == AnalysisKind.Js;
+
+    public string EvidenceSourceName => Loc.Get("Nav.Js");
+    public string? EvidenceTarget => IsReady ? TargetPath : null;
+    public IReadOnlyList<EvidenceRow> EvidenceItems => Evidence;
 
     public ICommand PickFolderCommand { get; }
     public ICommand PickAsarCommand { get; }

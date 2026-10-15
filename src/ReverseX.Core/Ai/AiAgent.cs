@@ -49,7 +49,7 @@ public sealed class AiAgent
 
     public async Task<AgentResult> RunAsync(IReadOnlyList<AiMessage> history, string question, AgentOptions opt, CancellationToken ct)
     {
-        var model = AiModels.Get(opt.ModelId);
+        var model = AiProviders.PricingFor(opt.ModelId);
         var system = SystemPrompt(opt);
         var defs = _tools.Definitions();
         var work = new List<AiMessage>(history) { AiMessage.User(question) };
@@ -145,6 +145,7 @@ public sealed class AiAgent
     /// <summary>Caps output so that even a full-length answer cannot go far past the remaining budget (input cost is already counted).</summary>
     public static int MaxTokensFor(ClaudeModel model, decimal remainingUsd, int ceiling)
     {
+        if (model.Price.Output <= 0) return ceiling; // no price list for this vendor: budget cannot cap output
         var affordable = remainingUsd / model.Price.Output * 1_000_000m;
         return (int)Math.Clamp(affordable, 1024m, ceiling);
     }

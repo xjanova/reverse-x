@@ -15,7 +15,7 @@ public sealed class MainViewModel : ObservableObject
     private bool _isThai = Loc.Current == UiPrefs.Thai;
 
     public MainViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null,
-        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null, AiServices? ai = null)
+        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null, AiServices? ai = null, LocalAnalyze? localAnalyze = null)
     {
         backend ??= new ReaAnalysisBackend();
         ai ??= new AiServices();
@@ -41,6 +41,16 @@ public sealed class MainViewModel : ObservableObject
         Js = new JsViewModel(backend, snapshots, OpenPathAsync);
         _pages["Binary"] = Binary;
         _pages["Js"] = Js;
+        Android = new InsightViewModel(InsightSection.Android, backend, snapshots, OpenPathAsync, localAnalyze);
+        Dotnet = new InsightViewModel(InsightSection.Dotnet, backend, snapshots, OpenPathAsync, localAnalyze);
+        Web = new InsightViewModel(InsightSection.Web, backend, snapshots, OpenPathAsync, localAnalyze);
+        Db = new InsightViewModel(InsightSection.Db, backend, snapshots, OpenPathAsync, localAnalyze);
+        _pages["Android"] = Android;
+        _pages["Dotnet"] = Dotnet;
+        _pages["Web"] = Web;
+        _pages["Db"] = Db;
+        Evidence = new EvidenceViewModel(() => new IEvidenceSource[] { Binary, Js, Android, Dotnet, Web, Db });
+        _pages["Evidence"] = Evidence;
         Ai = new AiViewModel(ai);
         Settings = new SettingsViewModel(ai);
         Settings.Changed += Ai.RefreshSettings;
@@ -66,6 +76,11 @@ public sealed class MainViewModel : ObservableObject
     public HomeViewModel Home { get; }
     public BinaryViewModel Binary { get; }
     public JsViewModel Js { get; }
+    public InsightViewModel Android { get; }
+    public InsightViewModel Dotnet { get; }
+    public InsightViewModel Web { get; }
+    public InsightViewModel Db { get; }
+    public EvidenceViewModel Evidence { get; }
     public AiViewModel Ai { get; }
     public SettingsViewModel Settings { get; }
 
@@ -83,9 +98,27 @@ public sealed class MainViewModel : ObservableObject
             Ai.SetTarget(path, kind);
         switch (kind)
         {
-            case FileKind.Pe or FileKind.DotNet or FileKind.Elf or FileKind.MachO:
+            case FileKind.DotNet:
+                // The metadata view is read locally and is quick, so it is ready by the time the user opens the .NET page.
+                _ = Dotnet.OpenAsync(path, kind);
                 Select("Binary");
                 await Binary.OpenAsync(path, kind).ConfigureAwait(true);
+                break;
+            case FileKind.Pe or FileKind.Elf or FileKind.MachO:
+                Select("Binary");
+                await Binary.OpenAsync(path, kind).ConfigureAwait(true);
+                break;
+            case FileKind.Apk:
+                Select("Android");
+                await Android.OpenAsync(path, kind).ConfigureAwait(true);
+                break;
+            case FileKind.Har or FileKind.Wasm:
+                Select("Web");
+                await Web.OpenAsync(path, kind).ConfigureAwait(true);
+                break;
+            case FileKind.Sqlite:
+                Select("Db");
+                await Db.OpenAsync(path, kind).ConfigureAwait(true);
                 break;
             case FileKind.Asar or FileKind.AppFolder or FileKind.Folder:
                 Select("Js");
@@ -150,5 +183,9 @@ public sealed class MainViewModel : ObservableObject
         Show(key);
     }
 
-    private void Show(string key) => Current = _pages[key];
+    private void Show(string key)
+    {
+        if (key == "Evidence") Evidence.Refresh();
+        Current = _pages[key];
+    }
 }

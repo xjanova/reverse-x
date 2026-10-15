@@ -13,6 +13,8 @@
         <DataTemplate DataType="{x:Type vm:JsViewModel}"><views:JsPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:AiViewModel}"><views:AiPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><views:SettingsPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:InsightViewModel}"><views:InsightPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:EvidenceViewModel}"><views:EvidencePage/></DataTemplate>
 
         <!-- ป้ายหลักฐาน: เห็นจริง / อนุมาน / ยังไม่รู้ -->
         <DataTemplate DataType="{x:Type vm:EvidenceRow}">

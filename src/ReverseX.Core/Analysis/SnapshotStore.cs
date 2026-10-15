@@ -27,7 +27,9 @@ public sealed class SnapshotStore
     }
 
     public string DirFor(string sourcePath) => Path.Combine(_root, IdFor(sourcePath));
-    public string FileFor(string sourcePath) => Path.Combine(DirFor(sourcePath), "snapshot.json.gz");
+    /// <param name="slot">Lets two pages keep separate results for the same file (e.g. REA view vs local metadata view).</param>
+    public string FileFor(string sourcePath, string? slot = null) =>
+        Path.Combine(DirFor(sourcePath), slot is null ? "snapshot.json.gz" : $"snapshot.{slot}.json.gz");
 
     public static (long Size, DateTime WriteUtc) Stamp(string path)
     {
@@ -40,9 +42,9 @@ public sealed class SnapshotStore
         return (0, DateTime.MinValue);
     }
 
-    public void Save(AnalysisSnapshot snapshot)
+    public void Save(AnalysisSnapshot snapshot, string? slot = null)
     {
-        var file = FileFor(snapshot.SourcePath);
+        var file = FileFor(snapshot.SourcePath, slot);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
         var tmp = file + ".tmp";
         using (var fs = File.Create(tmp))
@@ -52,9 +54,9 @@ public sealed class SnapshotStore
     }
 
     /// <summary>Returns null when there is no usable snapshot (missing, unreadable or from an older format).</summary>
-    public AnalysisSnapshot? TryLoad(string sourcePath)
+    public AnalysisSnapshot? TryLoad(string sourcePath, string? slot = null)
     {
-        var file = FileFor(sourcePath);
+        var file = FileFor(sourcePath, slot);
         if (!File.Exists(file)) return null;
         try
         {

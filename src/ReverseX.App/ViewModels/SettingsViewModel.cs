@@ -39,6 +39,8 @@ public sealed class SettingsViewModel : ObservableObject
         _svc = svc;
         _budgetText = svc.Prefs.BudgetUsd.ToString("0.00", CultureInfo.InvariantCulture);
         foreach (var m in AiModels.All) Models.Add(new ModelOptionVm(m, this));
+        _modelText = svc.Prefs.CustomModel ?? "";
+        _urlText = svc.Prefs.CustomBaseUrl ?? "";
         DeleteKeyCommand = new RelayCommand(DeleteKey, () => _hasKey);
         RefreshKeyState();
         Loc.Changed += () => { foreach (var m in Models) m.Refresh(); Raise(nameof(KeyPathText)); Raise(nameof(SelectedPrice)); };
@@ -46,7 +48,62 @@ public sealed class SettingsViewModel : ObservableObject
 
     public event Action? Changed;
 
+    private string _modelText;
+    private string _urlText;
+
     public ObservableCollection<ModelOptionVm> Models { get; } = new();
+    public IReadOnlyList<AiProvider> Providers => AiProviders.All;
+
+    public string SelectedProviderId
+    {
+        get => _svc.Prefs.Provider;
+        set
+        {
+            if (_svc.Prefs.Provider == value || !AiProviders.IsKnown(value)) return;
+            _svc.Prefs.Provider = value;
+            var p = AiProviders.Get(value);
+            // each vendor starts from its own defaults; typed values belong to the vendor they were typed for
+            _svc.Prefs.CustomModel = p.IsAnthropic ? null : p.DefaultModel;
+            _svc.Prefs.CustomBaseUrl = null;
+            _modelText = _svc.Prefs.CustomModel ?? "";
+            _urlText = p.UrlEditable ? p.BaseUrl : "";
+            if (p.UrlEditable && p.BaseUrl.Length > 0) _svc.Prefs.CustomBaseUrl = p.BaseUrl;
+            KeyNotice = "";
+            RefreshKeyState();
+            Persist();
+            Raise(nameof(SelectedProviderId)); Raise(nameof(IsAnthropic)); Raise(nameof(ShowCustomModel)); Raise(nameof(ShowUrl));
+            Raise(nameof(NeedsKey)); Raise(nameof(ModelText)); Raise(nameof(UrlText)); Raise(nameof(KeyPathText)); Raise(nameof(UrlValid));
+        }
+    }
+
+    public bool IsAnthropic => AiProviders.Get(_svc.Prefs.Provider).IsAnthropic;
+    public bool ShowCustomModel => !IsAnthropic;
+    public bool ShowUrl => AiProviders.Get(_svc.Prefs.Provider).UrlEditable;
+    public bool NeedsKey => AiProviders.Get(_svc.Prefs.Provider).NeedsKey;
+
+    public string ModelText
+    {
+        get => _modelText;
+        set
+        {
+            if (!Set(ref _modelText, value)) return;
+            _svc.Prefs.CustomModel = value.Trim();
+            Persist();
+        }
+    }
+
+    public string UrlText
+    {
+        get => _urlText;
+        set
+        {
+            if (!Set(ref _urlText, value)) return;
+            _svc.Prefs.CustomBaseUrl = value.Trim();
+            Raise(nameof(UrlValid));
+            if (UrlValid) Persist();
+        }
+    }
+    public bool UrlValid => !ShowUrl || AiProviders.IsAcceptableUrl(_urlText);
     public ICommand DeleteKeyCommand { get; }
 
     public bool HasKey { get => _hasKey; private set { if (Set(ref _hasKey, value)) Raise(nameof(HasNoKey)); } }
@@ -55,7 +112,7 @@ public sealed class SettingsViewModel : ObservableObject
     public string KeyNotice { get => _keyNotice; private set { if (Set(ref _keyNotice, value)) Raise(nameof(HasKeyNotice)); } }
     public bool HasKeyNotice => _keyNotice.Length > 0;
     public bool KeyNoticeError { get => _keyNoticeError; private set => Set(ref _keyNoticeError, value); }
-    public string KeyPathText => Loc.Format("Set.Key.Where", Path.Combine(AppPaths.Root, "apikey.bin"));
+    public string KeyPathText => Loc.Format("Set.Key.Where", _svc.ActiveKeys.FilePath);
 
     public string SelectedModelId
     {
@@ -95,8 +152,8 @@ public sealed class SettingsViewModel : ObservableObject
 
     private void RefreshKeyState()
     {
-        HasKey = _svc.Keys.HasKey;
-        MaskedKey = _hasKey && _svc.Keys.Load() is { } k ? ApiKeyStore.Mask(k) : "";
+        HasKey = _svc.ActiveKeys.HasKey;
+        MaskedKey = _hasKey && _svc.ActiveKeys.Load() is { } k ? ApiKeyStore.Mask(k) : "";
     }
 
     /// <summary>The page hands over the PasswordBox text; it is stored encrypted and the box is cleared by the caller.</summary>
@@ -104,10 +161,10 @@ public sealed class SettingsViewModel : ObservableObject
     {
         key = key?.Trim() ?? "";
         if (key.Length == 0) { Notice(Loc.Get("Set.Key.Empty"), true); return; }
-        if (!key.StartsWith("sk-ant-", StringComparison.Ordinal)) { Notice(Loc.Get("Set.Key.Format"), true); return; }
+        if (IsAnthropic && !key.StartsWith("sk-ant-", StringComparison.Ordinal)) { Notice(Loc.Get("Set.Key.Format"), true); return; }
         try
         {
-            _svc.Keys.Save(key);
+            _svc.ActiveKeys.Save(key);
         }
         catch (Exception ex) when (ex is System.Security.Cryptography.CryptographicException or IOException or UnauthorizedAccessException)
         {
@@ -122,7 +179,7 @@ public sealed class SettingsViewModel : ObservableObject
 
     private void DeleteKey()
     {
-        _svc.Keys.Delete();
+        _svc.ActiveKeys.Delete();
         RefreshKeyState();
         Notice(Loc.Get("Set.Key.Deleted"), false);
         Changed?.Invoke();

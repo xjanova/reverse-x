@@ -174,6 +174,10 @@ public enum AnalysisKind
     DotNet,
     Js,
     Native,
+    Android,
+    Db,
+    Web,
+    DotNetMeta,
 }
 
 public sealed record AnalysisSnapshot
@@ -190,4 +194,9 @@ public sealed record AnalysisSnapshot
     public JsAppModel? Js { get; init; }
     public NativeModel? Native { get; init; }
     public GoBuildInfoModel? Go { get; init; }
+    public AndroidModel? Android { get; init; }
+    public DbModel? Db { get; init; }
+    public HarModel? Har { get; init; }
+    public WasmModel? Wasm { get; init; }
+    public NetMetaModel? NetMeta { get; init; }
 }

@@ -225,6 +225,93 @@ public class Phase5Tests : IDisposable
         Assert.False(events.OfType<StepFinished>().Single().Ok);
     }
 
+    // ---------- GuardPaths ----------
+    private (AgentToolbox Box, FakeRea Rea, string Target) Guard()
+    {
+        var target = Path.Combine(_dir, "proj", "app.asar");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        var rea = new FakeRea();
+        return (new AgentToolbox(rea, new[] { Tool("inspect_artifact") }, target, null, _ => { }), rea, target);
+    }
+
+    private static string J(object o) => System.Text.Json.JsonSerializer.Serialize(o);
+
+    [Theory]
+    [InlineData("../secret.txt")]
+    [InlineData("..\\secret.txt")]
+    [InlineData("sub/../../secret.txt")]
+    [InlineData("sub\\..\\..\\..\\Windows\\win.ini")]
+    [InlineData("..")]
+    public async Task GuardPaths_RelativeDotDot_IsRefused(string path)
+    {
+        var (box, rea, _) = Guard();
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { path }), default);
+        Assert.True(r.IsError);
+        Assert.Contains("..", r.Text);
+        Assert.Empty(rea.Calls);
+    }
+
+    [Theory]
+    [InlineData("C:Windows\\win.ini")]            // drive-relative: resolved against C:'s current folder
+    [InlineData("C:\\Windows\\win.ini")]
+    [InlineData("\\\\?\\C:\\Windows\\win.ini")]   // device path prefix
+    [InlineData("\\\\server\\share\\x.exe")]       // UNC
+    public async Task GuardPaths_PathsWithColonOrOtherRoots_AreRefused(string path)
+    {
+        var (box, rea, _) = Guard();
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { path }), default);
+        Assert.True(r.IsError);
+        Assert.Empty(rea.Calls);
+    }
+
+    [Fact]
+    public async Task GuardPaths_AbsoluteDotDotEscapingProject_IsRefused()
+    {
+        var (box, rea, target) = Guard();
+        var sneaky = Path.GetDirectoryName(target) + "\\..\\..\\outside.bin";
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { path = sneaky }), default);
+        Assert.True(r.IsError);
+        Assert.Empty(rea.Calls);
+    }
+
+    [Fact]
+    public async Task GuardPaths_SiblingFolderWithSamePrefix_IsRefused()
+    {
+        var (box, rea, target) = Guard();
+        var sibling = Path.GetDirectoryName(target) + "-evil\\x.bin";   // ...\proj-evil\x.bin must not pass as ...\proj
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { path = sibling }), default);
+        Assert.True(r.IsError);
+        Assert.Empty(rea.Calls);
+    }
+
+    [Fact]
+    public async Task GuardPaths_ArrayWithOneBadEntry_IsRefused()
+    {
+        var (box, rea, target) = Guard();
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { input_files = new[] { target, "C:\\Windows\\win.ini" } }), default);
+        Assert.True(r.IsError);
+        Assert.Empty(rea.Calls);
+    }
+
+    [Fact]
+    public async Task GuardPaths_ArrayInsideProject_IsAllowed()
+    {
+        var (box, rea, target) = Guard();
+        var inside = Path.Combine(Path.GetDirectoryName(target)!, "sub", "b.js");
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { paths = new[] { target, inside, "sub/c.js" } }), default);
+        Assert.False(r.IsError);
+        Assert.Single(rea.Calls);
+    }
+
+    [Fact]
+    public async Task GuardPaths_IgnoresNonPathKeys()
+    {
+        var (box, rea, _) = Guard();
+        var r = await box.ExecuteAsync("inspect_artifact", J(new { query = "../../etc", path = "a/b.js" }), default);
+        Assert.False(r.IsError);
+        Assert.Single(rea.Calls);
+    }
+
     [Fact]
     public async Task Refusal_GivesThaiMessage_AndRollsHistoryBack()
     {

@@ -94,6 +94,11 @@ public static class FileKindDetector
         {
             using var zip = ZipFile.OpenRead(path);
             if (zip.GetEntry("AndroidManifest.xml") is not null) return new FileKindResult(FileKind.Apk);
+            // Split-APK bundles (XAPK/APKS/APKM): a zip holding base.apk and/or several .apk splits.
+            var apks = zip.Entries.Count(e => e.FullName.EndsWith(".apk", StringComparison.OrdinalIgnoreCase));
+            if (apks > 0 && (ext is ".xapk" or ".apks" or ".apkm" || zip.GetEntry("manifest.json") is not null
+                             || zip.Entries.Any(e => e.Name.Equals("base.apk", StringComparison.OrdinalIgnoreCase))))
+                return new FileKindResult(FileKind.Apk, ext is ".xapk" or ".apks" or ".apkm" ? ext[1..].ToUpperInvariant() : "XAPK");
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException) { /* not a readable zip */ }
         return ext == ".apk" ? new FileKindResult(FileKind.Apk) : new FileKindResult(FileKind.Unknown, "ZIP");

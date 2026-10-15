@@ -29,6 +29,13 @@ public partial class App : Application
         Shutdown();
     }
 
+    private async Task RunPhase8Async(string dir, string[] files)
+    {
+        try { await ScreenshotMode.RunPhase8Async(dir, files); }
+        catch (Exception ex) { AppPaths.Log("Phase 8 screenshot mode failed", ex); Console.Error.WriteLine(ex); }
+        Shutdown();
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -37,6 +44,14 @@ public partial class App : Application
             AppPaths.Log("Unhandled UI exception", args.Exception);
             MessageBox.Show(Loc.Get("Err.Generic"), "Reverse X", MessageBoxButton.OK, MessageBoxImage.Warning);
             args.Handled = true;
+        };
+        // Background-thread crashes end the process; at least leave the reason in the log.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            AppPaths.Log($"Unhandled exception (terminating: {args.IsTerminating})", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            AppPaths.Log("Unobserved task exception", args.Exception);
+            args.SetObserved();
         };
 
         var prefs = UiPrefs.Load();
@@ -49,6 +64,12 @@ public partial class App : Application
             var dir = e.Args[shot + 1];
             var empty = e.Args.Contains("--empty");
             if (e.Args.Contains("--phase5")) { _ = RunPhase5Async(dir); return; }
+            var p8 = Array.IndexOf(e.Args, "--phase8");
+            if (p8 >= 0)
+            {
+                _ = RunPhase8Async(dir, e.Args.Skip(p8 + 1).TakeWhile(a => !a.StartsWith("--")).ToArray());
+                return;
+            }
             var p4 = Array.IndexOf(e.Args, "--phase4");
             if (p4 >= 0)
             {
