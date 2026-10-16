@@ -34,9 +34,10 @@ public sealed class SettingsViewModel : ObservableObject
     private bool _hasKey;
     private string _maskedKey = "";
 
-    public SettingsViewModel(AiServices svc)
+    public SettingsViewModel(AiServices svc, LicenseViewModel license)
     {
         _svc = svc;
+        License = license;
         _budgetText = svc.Prefs.BudgetUsd.ToString("0.00", CultureInfo.InvariantCulture);
         foreach (var m in AiModels.All) Models.Add(new ModelOptionVm(m, this));
         _modelText = svc.Prefs.CustomModel ?? "";
@@ -47,6 +48,8 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     public event Action? Changed;
+
+    public LicenseViewModel License { get; }
 
     private string _modelText;
     private string _urlText;

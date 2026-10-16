@@ -13,5 +13,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\ReverseX.Core\ReverseX.Core.csproj" />
+    <ProjectReference Include="..\..\src\ReverseX.Licensing\ReverseX.Licensing.csproj" />
   </ItemGroup>
 </Project>

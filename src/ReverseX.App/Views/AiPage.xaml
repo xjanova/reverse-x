@@ -243,9 +243,17 @@
                     <!-- conversation / empty states -->
                     <Grid Grid.Row="1">
                         <ScrollViewer x:Name="Scroller" VerticalScrollBarVisibility="Auto" Padding="0,0,6,0" ScrollChanged="OnScrollChanged"
-                                      Visibility="{Binding HasConversation, Converter={StaticResource B2V}}">
+                                      Visibility="{Binding ShowConversation, Converter={StaticResource B2V}}">
                             <ItemsControl ItemsSource="{Binding Items}" Focusable="False"/>
                         </ScrollViewer>
+
+                        <!-- Free plan: ผู้ช่วย AI เป็นฟีเจอร์ Pro -->
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="480" Visibility="{Binding ShowProLock, Converter={StaticResource B2V}}">
+                            <Image Source="/ReverseX;component/Assets/Icons3D/ai.png" Width="96" Height="96" Style="{StaticResource Icon3D}"/>
+                            <TextBlock Style="{StaticResource T.H2}" FontSize="19" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,12,0,0" Text="{DynamicResource S.Ai.Pro.Title}"/>
+                            <TextBlock Margin="0,8,0,14" TextAlignment="Center" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource B.Text2}" Text="{DynamicResource S.Ai.Pro.Body}"/>
+                            <Button Style="{StaticResource Btn.Aqua}" HorizontalAlignment="Center" Content="{DynamicResource S.Ai.Pro.Btn}" Command="{Binding GoSettingsCommand}"/>
+                        </StackPanel>
 
                         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="470" Visibility="{Binding ShowNoKey, Converter={StaticResource B2V}}">
                             <Image Source="/ReverseX;component/Assets/Icons3D/settings.png" Width="96" Height="96" Style="{StaticResource Icon3D}"/>

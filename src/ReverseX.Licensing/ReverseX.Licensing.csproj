@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- License, trial and signed self-update on the xman studio product API (slug reverse-x). Same scheme as Anti X. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>ReverseX.Licensing</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="ReverseX.Tests" />
+  </ItemGroup>
 </Project>

@@ -19,6 +19,182 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel MaxWidth="760" HorizontalAlignment="Left">
 
+                <!-- ไลเซนส์ (xman4289.com · reverse-x) -->
+                <ContentControl x:Name="LicenseCard" Style="{StaticResource GlassCard}" Padding="18,14" Margin="0,0,0,12" DataContext="{Binding License}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Source="/ReverseX;component/Assets/Icons3D/evidence.png" Width="28" Height="28" Style="{StaticResource Icon3D}"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource T.H2}" FontSize="16" Margin="8,0,0,0" VerticalAlignment="Center" Text="{DynamicResource S.Lic.Title}"/>
+                            <ContentControl Grid.Column="2" Content="{Binding TierText}" Padding="12,4" FontSize="12" VerticalAlignment="Center">
+                                <ContentControl.Style>
+                                    <Style TargetType="ContentControl" BasedOn="{StaticResource Chip.Grey}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Tier}" Value="Pro"><Setter Property="Background" Value="{DynamicResource B.GreenSoft}"/><Setter Property="BorderBrush" Value="{DynamicResource B.GreenSoftLine}"/><Setter Property="Foreground" Value="{DynamicResource B.GreenText}"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Tier}" Value="Trial"><Setter Property="Background" Value="{DynamicResource B.CyanSoft}"/><Setter Property="BorderBrush" Value="{DynamicResource B.CyanSoftLine}"/><Setter Property="Foreground" Value="{DynamicResource B.CyanText}"/></DataTrigger>
+                                            <DataTrigger Binding="{Binding Tier}" Value="Unregistered"><Setter Property="Background" Value="{DynamicResource B.RedSoft}"/><Setter Property="BorderBrush" Value="{DynamicResource B.RedSoftLine}"/><Setter Property="Foreground" Value="{DynamicResource B.RedText}"/></DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ContentControl.Style>
+                            </ContentControl>
+                        </Grid>
+
+                        <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" FontSize="13.5" FontWeight="Medium" Foreground="{DynamicResource B.Text}" Text="{Binding ReasonText}"/>
+
+                        <!-- วันทดลองที่เหลือ -->
+                        <StackPanel Margin="0,10,0,0" Visibility="{Binding IsTrial, Converter={StaticResource B2V}}">
+                            <TextBlock FontSize="12" Foreground="{DynamicResource B.CyanText}" FontWeight="SemiBold" Text="{Binding TrialDaysText}"/>
+                            <ProgressBar Margin="0,6,0,0" Height="8" Minimum="0" Maximum="14" Value="{Binding TrialDaysLeft, Mode=OneWay}">
+                                <ProgressBar.Template>
+                                    <ControlTemplate TargetType="ProgressBar">
+                                        <Border CornerRadius="4" Background="{DynamicResource B.Input}" BorderBrush="{DynamicResource B.InputLine}" BorderThickness="1" ClipToBounds="True">
+                                            <Grid>
+                                                <Border x:Name="PART_Track"/>
+                                                <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource B.Cyan}"/>
+                                            </Grid>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ProgressBar.Template>
+                            </ProgressBar>
+                        </StackPanel>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,0,12,3" Text="{DynamicResource S.Lic.Key}"/>
+                            <TextBlock Grid.Column="1" FontSize="12" FontFamily="{StaticResource F.Mono}" Foreground="{DynamicResource B.Text}" Margin="0,0,0,3" Text="{Binding KeyText}" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Grid.Row="1" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,0,12,3" Text="{DynamicResource S.Lic.Plans}"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12" Foreground="{DynamicResource B.Text2}" Margin="0,0,0,3" TextWrapping="Wrap" Text="{DynamicResource S.Lic.PlansBody}"/>
+                            <TextBlock Grid.Row="2" FontSize="12" Foreground="{DynamicResource B.Text3}" Margin="0,0,12,0" Text="{DynamicResource S.Lic.Server}"/>
+                            <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12" Foreground="{DynamicResource B.Text2}" TextWrapping="Wrap" Text="{Binding VerifiedText}"/>
+                        </Grid>
+
+                        <Border Margin="0,10,0,0" CornerRadius="10" Padding="10,7" BorderThickness="1" Background="{DynamicResource B.AmberSoft}" BorderBrush="{DynamicResource B.AmberSoftLine}"
+                                Visibility="{Binding HasNote, Converter={StaticResource B2V}}">
+                            <TextBlock Text="{Binding NoteText}" TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource B.Text}"/>
+                        </Border>
+
+                        <!-- ใส่คีย์ -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Height="38" CornerRadius="14" Background="{DynamicResource B.Input}" BorderBrush="{DynamicResource B.InputLine}" BorderThickness="1">
+                                <Grid>
+                                    <TextBlock Text="{DynamicResource S.Lic.Box}" Margin="14,0" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource B.Text3}" IsHitTestVisible="False" TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding KeyInput}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <TextBox x:Name="LicenseKeyBox" Background="Transparent" BorderThickness="0" Padding="12,0" VerticalContentAlignment="Center" FontSize="13" FontFamily="{StaticResource F.Mono}"
+                                             CharacterCasing="Upper" MaxLength="64" Foreground="{DynamicResource B.Text}" CaretBrush="{DynamicResource B.Cyan}"
+                                             Text="{Binding KeyInput, UpdateSourceTrigger=PropertyChanged}"/>
+                                </Grid>
+                            </Border>
+                            <Button Grid.Column="1" Margin="8,0,0,0" Height="38" Style="{StaticResource Btn.Aqua}" Content="{DynamicResource S.Lic.Activate}" Command="{Binding ActivateCommand}"/>
+                        </Grid>
+
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Style="{StaticResource Btn.Violet}" Margin="0,0,8,6" Content="{DynamicResource S.Lic.Buy}" Command="{Binding BuyCommand}" Visibility="{Binding ShowBuy, Converter={StaticResource B2V}}"/>
+                            <Button Style="{StaticResource Btn.Ghost}" Margin="0,0,8,6" Content="{DynamicResource S.Lic.Refresh}" Command="{Binding RefreshCommand}"/>
+                            <Button Style="{StaticResource Btn.Ghost}" Margin="0,0,8,6" Content="{DynamicResource S.Lic.Move}" Command="{Binding MoveCommand}" Visibility="{Binding CanMove, Converter={StaticResource B2V}}"/>
+                            <Button Style="{StaticResource Btn.Ghost}" Margin="0,0,8,6" Content="{DynamicResource S.Lic.Deactivate}" Command="{Binding DeactivateCommand}" Visibility="{Binding HasPaidKey, Converter={StaticResource B2V}}"/>
+                        </WrapPanel>
+
+                        <Border Margin="0,4,0,0" CornerRadius="10" Padding="10,7" BorderThickness="1" Visibility="{Binding HasNotice, Converter={StaticResource B2V}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource B.GreenSoft}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource B.GreenSoftLine}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding NoticeError}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource B.RedSoft}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource B.RedSoftLine}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding Notice}" TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource B.Text}"/>
+                        </Border>
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource B.Text3}" Text="{DynamicResource S.Lic.Privacy}"/>
+                    </StackPanel>
+                </ContentControl>
+
+                <!-- อัปเดต -->
+                <ContentControl x:Name="UpdateCard" Style="{StaticResource GlassCard}" Padding="18,14" Margin="0,0,0,12" DataContext="{Binding License}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Source="/ReverseX;component/Assets/Icons3D/settings.png" Width="28" Height="28" Style="{StaticResource Icon3D}"/>
+                            <TextBlock Grid.Column="1" Style="{StaticResource T.H2}" FontSize="16" Margin="8,0,0,0" VerticalAlignment="Center" Text="{DynamicResource S.Upd.Title}"/>
+                            <ContentControl Grid.Column="2" Style="{StaticResource Chip.Violet}" Content="{Binding VersionText}" Padding="12,4" FontSize="12" VerticalAlignment="Center"/>
+                        </Grid>
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock FontSize="13.5" FontWeight="Medium" Foreground="{DynamicResource B.Text}" TextWrapping="Wrap" Text="{Binding UpdateText}"/>
+                                <TextBlock FontSize="11.5" Margin="0,2,0,0" Foreground="{DynamicResource B.Text3}" Text="{Binding CheckedText}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <Button Style="{StaticResource Btn.Aqua}" Margin="8,0,0,0" Content="{DynamicResource S.Upd.Install}" Command="{Binding InstallUpdateCommand}" Visibility="{Binding UpdateAvailable, Converter={StaticResource B2V}}"/>
+                                <Button Style="{StaticResource Btn.Ghost}" Margin="8,0,0,0" Content="{DynamicResource S.Upd.Check}" Command="{Binding CheckUpdateCommand}"/>
+                            </StackPanel>
+                        </Grid>
+                        <ProgressBar Margin="0,8,0,0" Height="8" Minimum="0" Maximum="100" Value="{Binding DownloadPercent, Mode=OneWay}" Visibility="{Binding IsDownloading, Converter={StaticResource B2V}}">
+                            <ProgressBar.Template>
+                                <ControlTemplate TargetType="ProgressBar">
+                                    <Border CornerRadius="4" Background="{DynamicResource B.Input}" BorderBrush="{DynamicResource B.InputLine}" BorderThickness="1" ClipToBounds="True">
+                                        <Grid>
+                                            <Border x:Name="PART_Track"/>
+                                            <Border x:Name="PART_Indicator" HorizontalAlignment="Left" CornerRadius="3" Background="{DynamicResource B.Cyan}"/>
+                                        </Grid>
+                                    </Border>
+                                </ControlTemplate>
+                            </ProgressBar.Template>
+                        </ProgressBar>
+                        <Border Margin="0,10,0,0" CornerRadius="10" Padding="10,7" BorderThickness="1" Visibility="{Binding HasUpdateNotice, Converter={StaticResource B2V}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="{DynamicResource B.GreenSoft}"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource B.GreenSoftLine}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UpdateNoticeError}" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource B.RedSoft}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource B.RedSoftLine}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="{Binding UpdateNotice}" TextWrapping="Wrap" FontSize="12.5" Foreground="{DynamicResource B.Text}"/>
+                        </Border>
+                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource B.Text3}" Text="{DynamicResource S.Upd.Hint}"/>
+                    </StackPanel>
+                </ContentControl>
+
                 <!-- API key -->
                 <ContentControl Style="{StaticResource GlassCard}" Padding="18,14" Margin="0,0,0,12">
                     <StackPanel>

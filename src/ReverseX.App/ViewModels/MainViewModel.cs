@@ -15,8 +15,10 @@ public sealed class MainViewModel : ObservableObject
     private bool _isThai = Loc.Current == UiPrefs.Thai;
 
     public MainViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null,
-        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null, AiServices? ai = null, LocalAnalyze? localAnalyze = null)
+        IAnalysisBackend? backend = null, SnapshotStore? snapshots = null, AiServices? ai = null, LocalAnalyze? localAnalyze = null,
+        LicenseViewModel? license = null)
     {
+        License = license ?? new LicenseViewModel(FixedLicenseSource.Pro(), new FixedUpdateSource(new ReverseX.Licensing.UpdateStatus { Current = AppVersion.Current }));
         backend ??= new ReaAnalysisBackend();
         ai ??= new AiServices();
         snapshots ??= new SnapshotStore();
@@ -52,7 +54,10 @@ public sealed class MainViewModel : ObservableObject
         Evidence = new EvidenceViewModel(() => new IEvidenceSource[] { Binary, Js, Android, Dotnet, Web, Db });
         _pages["Evidence"] = Evidence;
         Ai = new AiViewModel(ai);
-        Settings = new SettingsViewModel(ai);
+        Ai.SetPro(License.IsPro);
+        License.ProChanged += () => Ai.SetPro(License.IsPro);
+        License.Prime();
+        Settings = new SettingsViewModel(ai, License);
         Settings.Changed += Ai.RefreshSettings;
         Ai.GoSettingsRequested += () => Select("Settings");
         _pages["Ai"] = Ai;
@@ -83,6 +88,7 @@ public sealed class MainViewModel : ObservableObject
     public EvidenceViewModel Evidence { get; }
     public AiViewModel Ai { get; }
     public SettingsViewModel Settings { get; }
+    public LicenseViewModel License { get; }
 
     /// <summary>Opens a path from a page's own picker: detects the kind, records it in recent projects, then shows the matching page.</summary>
     private async Task OpenPathAsync(string path)
@@ -161,6 +167,17 @@ public sealed class MainViewModel : ObservableObject
             Raise(nameof(IsEnglish));
             if (value) Loc.Apply(UiPrefs.Thai);
         }
+    }
+
+    /// <summary>Screenshot mode switches language and theme without saving them; keep the title-bar toggles in step.</summary>
+    internal void SyncToggles()
+    {
+        _isThai = Loc.Current == UiPrefs.Thai;
+        _isNight = ThemeManager.Current != UiPrefs.Sky;
+        Raise(nameof(IsThai));
+        Raise(nameof(IsEnglish));
+        Raise(nameof(IsNight));
+        Raise(nameof(IsSky));
     }
 
     public bool IsEnglish

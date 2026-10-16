@@ -3,6 +3,7 @@ using ReverseX.App.Services;
 using ReverseX.App.ViewModels;
 using ReverseX.Core;
 using ReverseX.Core.Projects;
+using ReverseX.Licensing;
 
 namespace ReverseX.App;
 
@@ -29,6 +30,20 @@ public partial class App : Application
         Shutdown();
     }
 
+    private async Task RunPhase6Async(string dir)
+    {
+        try { await ScreenshotMode.RunPhase6Async(dir); }
+        catch (Exception ex) { AppPaths.Log("Phase 6 screenshot mode failed", ex); Console.Error.WriteLine(ex); }
+        Shutdown();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _license?.Dispose();
+        _updates?.Dispose();
+        base.OnExit(e);
+    }
+
     private async Task RunPhase8Async(string dir, string[] files)
     {
         try { await ScreenshotMode.RunPhase8Async(dir, files); }
@@ -36,9 +51,19 @@ public partial class App : Application
         Shutdown();
     }
 
+    private LicenseService? _license;
+    private UpdateService? _updates;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args.Length > 0 && e.Args[0] == Updater.Command)
+        {
+            // started by the previous version from this (new, verified) folder: put the files in place, then exit
+            var args = e.Args;
+            Task.Run(() => Updater.Run(args)).ContinueWith(t => Dispatcher.Invoke(() => Shutdown(t.Result)));
+            return;
+        }
         DispatcherUnhandledException += (_, args) =>
         {
             AppPaths.Log("Unhandled UI exception", args.Exception);
@@ -64,6 +89,7 @@ public partial class App : Application
             var dir = e.Args[shot + 1];
             var empty = e.Args.Contains("--empty");
             if (e.Args.Contains("--phase5")) { _ = RunPhase5Async(dir); return; }
+            if (e.Args.Contains("--phase6")) { _ = RunPhase6Async(dir); return; }
             var p8 = Array.IndexOf(e.Args, "--phase8");
             if (p8 >= 0)
             {
@@ -82,8 +108,16 @@ public partial class App : Application
             return;
         }
 
-        var vm = new MainViewModel(new ProjectStore());
+        void Log(string line) => AppPaths.Log(line);
+        _license = new LicenseService(AppPaths.Root, AppVersion.Current, Log);
+        _updates = new UpdateService(AppPaths.Root, AppContext.BaseDirectory.TrimEnd('\\', '/'), AppVersion.Current, Log);
+        var license = new LicenseViewModel(_license, _updates);
+        license.ExitRequested += Shutdown;
+
+        var vm = new MainViewModel(new ProjectStore(), license: license);
         new MainWindow(vm).Show();
+        _license.Start();
+        _updates.Start();
         _ = vm.Home.CheckToolsAsync();
     }
 }

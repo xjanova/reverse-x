@@ -1,0 +1,100 @@
+name: Build & Release
+
+# A tag vX.Y.Z builds, tests, publishes and signs Reverse X, then attaches
+# ReverseX-X.Y.Z-win-x64.zip (+ .sig and .sha256) to a GitHub release.
+# Users never download from GitHub: xman4289.com reads this release and serves the file
+# from its own /reverse-x/download route; the app only accepts downloads from xman4289.com.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # net8.0 targets; the 10 SDK is needed to read ReverseX.slnx
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          8.0.x
+          10.0.x
+
+    - name: Extract version from tag
+      id: version
+      shell: bash
+      run: |
+        v="${GITHUB_REF#refs/tags/v}"
+        if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "Tag must look like vX.Y.Z (got $GITHUB_REF)"; exit 1
+        fi
+        echo "version=$v" >> "$GITHUB_OUTPUT"
+
+    - name: Build
+      run: dotnet build ReverseX.slnx -c Release
+
+    # REA integration tests need npx + network; the release gate is the unit suite
+    # (license, update signature, analyzers). Real-API tests skip without a key.
+    - name: Test
+      env:
+        REVERSEX_SKIP_REA: '1'
+      run: dotnet test tests/ReverseX.Tests -c Release --no-build
+
+    # Reverse X only installs an update whose update-manifest.json is signed with the key behind
+    # this secret (see src/ReverseX.Licensing/UpdatePackageVerifier.cs). The signer checks its own
+    # output with the public key built into the app and fails the release if they do not match.
+    - name: Publish, sign and zip
+      shell: pwsh
+      env:
+        REVERSEX_UPDATE_SIGNING_KEY: ${{ secrets.REVERSEX_UPDATE_SIGNING_KEY }}
+      run: |
+        if (-not $env:REVERSEX_UPDATE_SIGNING_KEY) { throw 'REVERSEX_UPDATE_SIGNING_KEY secret is not set' }
+        ./deploy/publish.ps1 -Version "${{ steps.version.outputs.version }}" -RequireSignature
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: "Reverse X v${{ steps.version.outputs.version }}"
+        body: |
+          ## Reverse X v${{ steps.version.outputs.version }}
+
+          ### ติดตั้งครั้งแรก
+          ดาวน์โหลดจาก https://xman4289.com/products/reverse-x แล้วแตกไฟล์ทั้งโฟลเดอร์ไว้ในที่ที่ผู้ใช้เขียนได้ (เช่น `%LOCALAPPDATA%\Programs\ReverseX`) แล้วเปิด `ReverseX.exe`
+          เปิดครั้งแรกต้องต่ออินเทอร์เน็ตเพื่อลงทะเบียนเครื่อง · เครื่องใหม่ได้ทดลอง Pro 14 วัน
+
+          ### อัปเดต
+          โปรแกรมตรวจและดาวน์โหลดอัปเดตจาก xman4289.com เอง (หรือกด ตรวจหาอัปเดต ในหน้า ตั้งค่า)
+          ทุกไฟล์เซ็นด้วยกุญแจของ xman studio (ECDSA P-256) — Reverse X ตรวจลายเซ็นก่อนติดตั้งทุกครั้ง
+
+          ใช้กับซอฟต์แวร์ที่คุณมีสิทธิ์วิเคราะห์เท่านั้น
+        files: |
+          publish/ReverseX-${{ steps.version.outputs.version }}-win-x64.zip
+          publish/ReverseX-${{ steps.version.outputs.version }}-win-x64.zip.sig
+          publish/ReverseX-${{ steps.version.outputs.version }}-win-x64.zip.sha256
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # xman4289.com re-reads the GitHub release on its next update check (cached a few minutes).
+    # This asks once right away (read-only update check, never /demo or any license endpoint).
+    - name: Ask xman studio to pick up the release
+      if: success()
+      shell: pwsh
+      continue-on-error: true
+      run: |
+        try {
+          $r = Invoke-RestMethod -Uri "https://xman4289.com/api/v1/product/reverse-x/update/check?current_version=0.0.0" -TimeoutSec 20
+          Write-Host "xman studio now reports latest version: $($r.latest_version)"
+        } catch {
+          Write-Host "Could not reach xman studio (non-critical): $_"
+        }

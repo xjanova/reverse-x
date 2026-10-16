@@ -8,6 +8,7 @@ using ReverseX.Core;
 using ReverseX.Core.Analysis;
 using ReverseX.Core.Files;
 using ReverseX.Core.Projects;
+using ReverseX.Licensing;
 
 namespace ReverseX.App.Services;
 
@@ -202,6 +203,90 @@ internal static class ScreenshotMode
         vm.Ai.LoadDemo(running: true); await Flush(); Shoot("ai-running");
         vm.Ai.LoadDemo(running: false); await Flush(); Shoot("ai-proposal");
         vm.Select("Settings"); await Flush(); Shoot("settings");
+        win.Close();
+        try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
+    }
+
+    /// <summary>"--screenshots DIR --phase6": the license + update cards, the register gate and the Pro lock, with fixed states (no server).</summary>
+    public static async Task RunPhase6Async(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var tmpRoot = Path.Combine(Path.GetTempPath(), "rx-shot6-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmpRoot);
+        var ai = new AiServices
+        {
+            Keys = new ReverseX.Core.Ai.ApiKeyStore(Path.Combine(tmpRoot, "apikey.bin")),
+            Prefs = new ReverseX.Core.Ai.AiPrefs(),
+            PrefsPath = Path.Combine(tmpRoot, "ai.json"),
+        };
+        var now = DateTime.UtcNow;
+        var lic = new FixedLicenseSource(new LicenseStatus
+        {
+            Tier = LicenseTier.Trial, Reason = LicenseReason.TrialActive, DaysLeft = 9, KeyMasked = "DEMO-…-7Q2K", LicenseType = "demo",
+            ExpiresAt = now.AddDays(9), LastVerifiedAt = now.AddHours(-2),
+        });
+        var upd = new FixedUpdateSource(new UpdateStatus { Current = "0.2.0", Latest = "0.2.0", CheckedAt = now.AddMinutes(-40) });
+        var license = new LicenseViewModel(lic, upd);
+        var vm = new MainViewModel(new ProjectStore(Path.Combine(tmpRoot, "projects.json")), snapshots: new SnapshotStore(Path.Combine(tmpRoot, "projects")), ai: ai, license: license);
+        var win = new MainWindow(vm)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual,
+            Left = -20000, Top = 0, ShowInTaskbar = false, Width = 1280, Height = 800,
+        };
+        win.Show();
+        await Flush();
+
+        async Task Shoot(string name)
+        {
+            foreach (var theme in new[] { UiPrefs.Night, UiPrefs.Sky })
+            {
+                ThemeManager.Apply(theme, save: false);
+                vm.SyncToggles();
+                await Flush();
+                Save(win, Path.Combine(dir, $"phase6-license-{name}-{(theme == UiPrefs.Sky ? "sky" : "night")}.png"));
+            }
+            ThemeManager.Apply(UiPrefs.Night, save: false);
+        }
+
+        vm.Select("Settings"); await Flush();
+        await Shoot("trial");
+
+        lic.Set(new LicenseStatus { Tier = LicenseTier.Free, Reason = LicenseReason.TrialEnded, LastVerifiedAt = now.AddDays(-1), Note = LicenseNote.Offline });
+        upd.Set(new UpdateStatus { Current = "0.2.0", Latest = "0.3.0", Available = true, State = UpdateState.Failed, Error = UpdateError.BadSignature, CheckedAt = now.AddMinutes(-3) });
+        license.ShowUpdateError(UpdateError.BadSignature);
+        license.ShowNotice(Loc.Get("Lic.Act.OtherDevice"), error: true);
+        await Flush();
+        await Shoot("free");
+
+        Loc.Apply(UiPrefs.English, save: false);
+        vm.SyncToggles();
+        lic.Set(new LicenseStatus
+        {
+            Tier = LicenseTier.Pro, Reason = LicenseReason.ProUntil, DaysLeft = 287, KeyMasked = "RVX7-…-K9M2", LicenseType = "yearly",
+            ExpiresAt = now.AddDays(287), LastVerifiedAt = now.AddHours(-1), HasPaidKey = true,
+        });
+        upd.Set(new UpdateStatus { Current = "0.2.0", Latest = "0.3.0", Available = true, State = UpdateState.Downloading, Progress = 0.62, CheckedAt = now.AddMinutes(-1) });
+        license.ShowUpdateNotice("", false);
+        license.ShowNotice(Loc.Get("Lic.Act.Activated"), error: false);
+        await Flush();
+        await Shoot("pro-en");
+
+        upd.Set(new UpdateStatus { Current = "0.2.0", Latest = "0.3.0", Available = true, State = UpdateState.Failed, Error = UpdateError.Incomplete, CheckedAt = now.AddMinutes(-1) });
+        license.ShowUpdateError(UpdateError.Incomplete);
+        await Flush();
+        await Shoot("incomplete-en");
+        Loc.Apply(UiPrefs.Thai, save: false);
+        vm.SyncToggles();
+
+        lic.Set(new LicenseStatus { Tier = LicenseTier.Free, Reason = LicenseReason.FreeNoKey, LastVerifiedAt = now });
+        vm.Select("Ai"); await Flush();
+        await Shoot("ai-locked");
+
+        lic.Set(new LicenseStatus { Tier = LicenseTier.Unregistered, Reason = LicenseReason.NotRegistered, Note = LicenseNote.Offline });
+        license.ShowNotice("", false);
+        vm.Select("Home"); await Flush();
+        await Shoot("gate");
+
         win.Close();
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }

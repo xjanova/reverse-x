@@ -74,7 +74,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         _ownFolder = svc.Prefs.OwnProjectFolder is { } f && Directory.Exists(f) ? f : null;
         Evidence.CollectionChanged += (_, _) => RaiseCounts();
         Unknowns.CollectionChanged += (_, _) => RaiseCounts();
-        Items.CollectionChanged += (_, _) => { Raise(nameof(ShowWelcome)); Raise(nameof(HasConversation)); };
+        Items.CollectionChanged += (_, _) => { Raise(nameof(ShowWelcome)); Raise(nameof(HasConversation)); Raise(nameof(ShowConversation)); };
         Loc.Changed += RefreshText;
     }
 
@@ -104,9 +104,22 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     }
     public bool CanSend => !_isRunning;
     public bool HasKey { get => _hasKey; private set { if (Set(ref _hasKey, value)) Raise(nameof(ShowNoKey)); } }
-    public bool ShowNoKey => !_hasKey;
-    public bool ShowWelcome => Items.Count == 0 && _hasKey;
+    public bool ShowNoKey => _isPro && !_hasKey;
+    public bool ShowWelcome => _isPro && Items.Count == 0 && _hasKey;
+    /// <summary>Free plan: the assistant (and the code it writes into the user's project) is Pro.</summary>
+    public bool ShowProLock => !_isPro;
+    public bool IsPro => _isPro;
+    private bool _isPro = true;
+
+    public void SetPro(bool pro)
+    {
+        if (_isPro == pro) return;
+        _isPro = pro;
+        if (!pro) _cts?.Cancel();
+        Raise(nameof(IsPro)); Raise(nameof(ShowProLock)); Raise(nameof(ShowNoKey)); Raise(nameof(ShowWelcome)); Raise(nameof(ShowConversation));
+    }
     public bool HasConversation => Items.Count > 0;
+    public bool ShowConversation => _isPro && Items.Count > 0;
     public bool HasPath => PathNodes.Count > 0;
     public bool HasNoEvidence => Evidence.Count == 0;
     public bool HasNoUnknowns => Unknowns.Count == 0;
@@ -212,7 +225,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     {
         var q = (text ?? Input).Trim();
         if (q.Length == 0 || IsRunning) return;
-        if (!HasKey) { GoSettingsRequested?.Invoke(); return; }
+        if (!_isPro || !HasKey) { GoSettingsRequested?.Invoke(); return; }
 
         Input = "";
         Items.Add(new ChatMessageVm { IsUser = true, Text = q });

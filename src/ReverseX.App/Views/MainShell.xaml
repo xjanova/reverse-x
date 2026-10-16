@@ -7,6 +7,7 @@
              TextElement.Foreground="{DynamicResource B.Text}"
              UseLayoutRounding="True" SnapsToDevicePixels="True">
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="B2V"/>
         <DataTemplate DataType="{x:Type vm:HomeViewModel}"><views:HomePage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:PlaceholderViewModel}"><views:PlaceholderPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:BinaryViewModel}"><views:BinaryPage/></DataTemplate>
@@ -149,6 +150,31 @@
 
                 <!-- ===== เนื้อหา -->
                 <ContentControl Grid.Column="1" Content="{Binding Current}" Focusable="False" IsTabStop="False"/>
+            </Grid>
+
+            <!-- ===== ลงทะเบียนเครื่องก่อนใช้ (owner rule: ยังไม่ลงทะเบียน = ใช้อะไรไม่ได้) -->
+            <Grid Grid.Row="1" x:Name="RegisterGate" Background="{DynamicResource B.Bg}" DataContext="{Binding License}"
+                  Visibility="{Binding ShowGate, Converter={StaticResource B2V}}">
+                <Rectangle Fill="{DynamicResource B.WinImage}"/>
+                <Rectangle Fill="{DynamicResource B.WinShade}"/>
+                <ContentControl Style="{StaticResource GlassCard}" Padding="30,24" MaxWidth="560" Margin="24" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <StackPanel>
+                        <Image Source="/ReverseX;component/Assets/Logo/reversex-logo-512.png" Width="88" Height="88" Style="{StaticResource Icon3D}" HorizontalAlignment="Center"/>
+                        <TextBlock Style="{StaticResource T.H2}" FontSize="20" Margin="0,12,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Text="{DynamicResource S.Gate.Title}"/>
+                        <TextBlock Margin="0,10,0,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource B.Text2}" Text="{DynamicResource S.Gate.Body}"/>
+                        <TextBlock Margin="0,12,0,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource B.Text}" Text="{Binding ReasonText}"/>
+                        <Border Margin="0,10,0,0" CornerRadius="10" Padding="10,7" BorderThickness="1" Background="{DynamicResource B.AmberSoft}" BorderBrush="{DynamicResource B.AmberSoftLine}"
+                                Visibility="{Binding HasNote, Converter={StaticResource B2V}}">
+                            <TextBlock Text="{Binding NoteText}" TextWrapping="Wrap" TextAlignment="Center" FontSize="12.5" Foreground="{DynamicResource B.Text}"/>
+                        </Border>
+                        <TextBlock Margin="0,8,0,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource B.CyanText}" Text="{Binding Notice}" Visibility="{Binding HasNotice, Converter={StaticResource B2V}}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,0">
+                            <Button Style="{StaticResource Btn.Aqua}" Margin="0,0,10,0" Content="{DynamicResource S.Gate.Retry}" Command="{Binding RefreshCommand}"/>
+                            <Button Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Gate.Exit}" Command="{Binding ExitCommand}"/>
+                        </StackPanel>
+                        <TextBlock Margin="0,12,0,0" TextAlignment="Center" TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource B.Text3}" Text="{DynamicResource S.Gate.Auto}"/>
+                    </StackPanel>
+                </ContentControl>
             </Grid>
         </Grid>
     </Grid>
