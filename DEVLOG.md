@@ -233,7 +233,7 @@
   - แก้ไปหนึ่งจุด: ปุ่มสลับ กลางคืน/ท้องฟ้า บนแถบหัวไม่เปลี่ยนตามธีมในโหมดถ่ายภาพ จึงเปลี่ยน `SyncLanguageToggle` เป็น `SyncToggles` (ซิงก์ทั้งภาษาและธีม)
 
 ### ผล
-- `dotnet build ReverseX.slnx`: ผ่าน 0 warning
+- `dotnet build ReverseX.slnx`: ผ่าน ~~0 warning~~ — **ไม่ถูกต้อง**: เป็น build แบบ incremental ซึ่งไม่คอมไพล์โปรเจกต์ที่ไม่เปลี่ยนซ้ำ warning เก่าจึงไม่แสดง build ใหม่ทั้งหมดยังมี warning อยู่ (แก้แล้วในหัวข้อ "ล้าง warning ให้เป็นศูนย์จริง" ด้านล่าง)
 - `dotnet test ReverseX.slnx` (รวม REA จริง): ผ่าน 224 ข้าม 2 (`RealApi_Haiku_*` ข้ามเพราะไม่มี key, `RealReleaseZip_*` ข้ามเพราะไม่ได้ตั้ง env แต่รันแยกแล้วผ่าน)
 - `actionlint 1.7.12` กับ `release.yml`: ไม่มี error (เครื่องไม่มี shellcheck จึงไม่ได้ตรวจสคริปต์ bash ข้างใน)
 
@@ -273,3 +273,33 @@
 - `UpdateTests.Updater_OldAppStillRunning_TouchesNothing` (200 ms): รอให้ process ของเทสต์เองปิด ซึ่งไม่มีวันปิด จึงหมดเวลาทุกครั้งแน่นอน
 - `Client_Start_Cancelled_DoesNotLeakProcess` (50 ms): npx ใช้เวลาเริ่มหลายวินาที จึงยกเลิกระหว่างเริ่มทุกครั้ง และหลังแก้ ถ้าผู้เรียกยกเลิกยังได้ `OperationCanceledException` เหมือนเดิม
 - เทสต์ cancel ใน Phase4/5/6 ใช้ token ที่ยกเลิกเองตรง ๆ กับตัวปลอม ไม่ได้แข่งกับนาฬิกา
+
+## ล้าง warning ให้เป็นศูนย์จริง
+
+### อาการ
+- DEVLOG เฟส 6 ส่วนที่สองบอกว่า build ได้ 0 warning แต่ `dotnet build ReverseX.slnx --no-incremental` ยังมี warning:
+  - `AiViewModel.cs(60)`: CS0169 field `_bound` ไม่ถูกใช้ (ขึ้นสองครั้ง จาก `ReverseX.App` และโปรเจกต์ชั่วคราว `wpftmp` ของ WPF)
+  - `AnthropicTurnStreamer.cs(116,117)`: CS8602 อาจ dereference ค่า null
+  - พอแก้สองตัวบนแล้ว ยังเจอ `Phase3Tests.cs(76)`: xUnit2029 ด้วย
+
+### สาเหตุและวิธีแก้ (ไม่ใช้ `#pragma` และไม่ใช้ `!`)
+- **CS0169 `_bound`**: ใส่มาพร้อม record `ProjectBinding(Path, Kind)` ตั้งแต่เฟส 5 แต่ไม่เคยมีโค้ดอ่านหรือเขียน
+  - ตรวจแล้วว่าไม่ใช่บั๊กที่หลุดไป: สิ่งที่ field นี้น่าจะใช้ทำ (ผูก REA session กับไฟล์เป้าหมาย) ทำอยู่แล้วด้วย `_targetPath`/`_targetKind`
+    - `SetTarget` ไม่ยอมเปลี่ยนเป้าหมายระหว่างที่ AI กำลังทำงาน และพอเปลี่ยนเป้าหมายก็เรียก `ReleaseToolsAsync`
+    - ดังนั้น `_tools` ตรงกับเป้าหมายปัจจุบันเสมอ
+  - จึงลบทั้ง field และ record ถ้าเก็บไว้จะเป็น state ซ้ำที่ไม่มีใครดูแล
+- **CS8602**: ตรวจ SDK `Anthropic` 12.55.0 ด้วย reflection (`NullabilityInfoContext`) พบว่า `Delta.StopReason` และ `RefusalStopDetails.Category` เป็น nullable จริงตาม API
+  - `ApiEnum` เป็น class, `stop_reason` ใน `message_delta` เป็น null ได้ และ `category` ก็ไม่จำเป็นต้องมี
+  - โค้ดเดิมเลี่ยงไม่ให้แอปพังเพราะมี try/catch ที่กลืน `NullReferenceException` ไว้ แต่ที่จริงคือไปพึ่ง exception
+  - แก้เป็น `StopReason?.Value()` และ `Category?.Raw()` ส่วน try/catch เดิมยังเก็บไว้กันข้อมูลรูปแบบผิดเท่านั้น
+  - ลองแล้วว่า `Value()` ไม่ throw กับค่าที่ไม่รู้จัก แต่คืน `-1` ซึ่ง `Map` จะแปลงเป็น `AiStop.Other`
+- **xUnit2029**: ใช้ `Assert.Empty(xs.Where(pred))` จึงเปลี่ยนเป็น `Assert.DoesNotContain(xs, pred)` ตามที่ analyzer แนะนำ
+  - xUnit 2.9 ยังแสดงคีย์ที่หายไปในข้อความตอนเทสต์ล้ม
+
+### ผล
+- `dotnet build ReverseX.slnx --no-incremental`: 0 warning 0 error
+- `dotnet test ReverseX.slnx` (รวม REA จริง): ผ่าน 225 ข้าม 2 (`RealApi_Haiku_*`, `RealReleaseZip_*` ข้ามเหมือนเดิม)
+
+### กติกาต่อจากนี้
+- ก่อนจะเขียนว่า "0 warning" ต้องตรวจด้วย `dotnet build ReverseX.slnx --no-incremental` ทุกครั้ง
+- build แบบ incremental ไม่คอมไพล์โปรเจกต์ที่ไม่เปลี่ยนซ้ำ warning ของโปรเจกต์นั้นจึงไม่แสดง

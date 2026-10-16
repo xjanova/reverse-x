@@ -113,8 +113,9 @@ public sealed class AnthropicTurnStreamer : IModelStreamer
             }
             else if (ev.TryPickDelta(out var md))
             {
-                try { stop = md.Delta.StopReason.Value(); } catch (Exception) { stop = null; }
-                try { if (md.Delta.StopDetails is { } sd) { cat = sd.Category.Raw(); expl = sd.Explanation; } } catch (Exception) { /* details are optional */ }
+                // stop_reason and stop_details.category are nullable in the API; the try only guards malformed data.
+                try { stop = md.Delta.StopReason?.Value(); } catch (Exception) { stop = null; }
+                try { if (md.Delta.StopDetails is { } sd) { cat = sd.Category?.Raw(); expl = sd.Explanation; } } catch (Exception) { /* details are optional */ }
                 var u = md.Usage;
                 outTok = u.OutputTokens;
                 if (u.InputTokens is { } i2) inTok = i2;

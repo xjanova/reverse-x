@@ -73,7 +73,7 @@ public class PaletteTests
             needed.Add("S.Step." + m.Groups[1].Value);
 
         Assert.True(needed.Count > 40);
-        Assert.Empty(needed.Distinct().Where(k => !keys.Contains(k)));
+        Assert.DoesNotContain(needed.Distinct(), k => !keys.Contains(k));
     }
 }
 

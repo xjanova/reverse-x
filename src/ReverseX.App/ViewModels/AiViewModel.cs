@@ -57,7 +57,6 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     private decimal _runCost;
     private decimal _sessionCost;
     private string _targetName = "";
-    private ProjectBinding? _bound;
 
     public AiViewModel(AiServices svc)
     {
@@ -77,8 +76,6 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         Items.CollectionChanged += (_, _) => { Raise(nameof(ShowWelcome)); Raise(nameof(HasConversation)); Raise(nameof(ShowConversation)); };
         Loc.Changed += RefreshText;
     }
-
-    private sealed record ProjectBinding(string Path, FileKind Kind);
 
     public event Action? GoSettingsRequested;
 
