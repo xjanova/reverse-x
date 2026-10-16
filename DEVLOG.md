@@ -246,3 +246,30 @@
 ### ข้อจำกัดที่ยังเหลือ
 - ยังไม่ได้ทดสอบกับ xman4289.com จริง เพราะห้ามยิง `/demo` และ endpoint ทดลอง ฝั่ง xmanstudio ต้องมีสินค้า slug `reverse-x` ก่อน (PR ฝั่ง xmanstudio อยู่ในเฟส 7 ของ brief)
 - ใน EN ที่ความสูง 800 px เมนูซ้ายต้องเลื่อนลงจึงจะเห็นเมนู "Settings" ทั้งปุ่ม (เป็นรายการแบบเลื่อนได้อยู่แล้ว)
+
+## แก้เทสต์ที่ผ่านบ้างไม่ผ่านบ้าง: `Client_RequestTimeout_Throws`
+
+### อาการ
+- `dotnet test ReverseX.slnx` ล้มประมาณ 1 ใน 4 รอบ ด้วย `Expected TimeoutException, Actual OperationCanceledException`
+
+### สาเหตุ
+- ใน `ReaClient.RequestAsync` ตัวจับเวลา timeout (`cts.CancelAfter`) เริ่มนับก่อนจะเขียน request ลง stdin แต่ `catch` ที่แปลงเป็น `TimeoutException` ครอบไว้แค่ตอนรอคำตอบ (`tcs.Task.WaitAsync`)
+- เทสต์ใช้ timeout 1 ms ถ้าเวลาหมดระหว่าง `SendAsync` (รอ `_writeLock` หรือเขียน pipe) จะหลุดออกไปเป็น `OperationCanceledException` ดิบ ๆ
+- ผลกระทบนอกเทสต์: ใน production ผู้เรียก (เช่น `AnalysisRunner`, `ToolCheckService`) จับ `TimeoutException` แยกไว้ เคสนี้จึงอาจถูกมองว่าผู้ใช้กดยกเลิกเอง ทั้งที่จริงคือ timeout
+
+### แก้
+- ให้ try/catch ครอบทั้งตอนส่งและตอนรอ
+- แยก timeout ออกเป็น `CancellationTokenSource` ของมันเอง (`timeoutCts`) แล้ว link กับ token ของผู้เรียก จะเป็น `TimeoutException` ก็ต่อเมื่อ timeout หมดและผู้เรียกไม่ได้ยกเลิก ถ้าผู้เรียกยกเลิกจะได้ `OperationCanceledException` เหมือนเดิม
+- ไม่ได้แก้เทสต์ให้ยอมรับทั้งสองแบบ เพราะสัญญาของ client คือ timeout ต้องเป็น `TimeoutException` เสมอ
+- เพิ่มเทสต์ `Client_RequestTimeout_ExpiringBeforeSend_IsStillTimeout` ที่ใช้ timeout = 0 เพื่อบังคับให้เกิดเคสที่เวลาหมดก่อนส่งทุกครั้ง ก่อนแก้เทสต์นี้ล้มทุกครั้ง (`TaskCanceledException` จาก `SendAsync` → `_writeLock.WaitAsync`) หลังแก้ผ่าน
+
+### ผล
+- รัน `Client_RequestTimeout*` (เทสต์เดิมและเทสต์ใหม่) ติดกัน 20 รอบ: ผ่านครบ 20/20
+- รัน `dotnet test ReverseX.slnx` ทั้งชุด 3 รอบ: ผ่านทุกรอบ ได้ผ่าน 225 ข้าม 2 (ข้ามตัวเดิม 2 ตัว)
+
+### ตรวจเทสต์อื่นที่ใช้เวลาหรือ timeout
+- ไม่พบจุดที่มีความเสี่ยงแบบเดียวกัน
+- `ReaCli.RunAsync`, `NodeProbe.TryGetVersionAsync`, `ApkFetcher.FetchAsync`: `catch` ครอบทุก await ที่ใช้ token ของ timeout อยู่แล้ว
+- `UpdateTests.Updater_OldAppStillRunning_TouchesNothing` (200 ms): รอให้ process ของเทสต์เองปิด ซึ่งไม่มีวันปิด จึงหมดเวลาทุกครั้งแน่นอน
+- `Client_Start_Cancelled_DoesNotLeakProcess` (50 ms): npx ใช้เวลาเริ่มหลายวินาที จึงยกเลิกระหว่างเริ่มทุกครั้ง และหลังแก้ ถ้าผู้เรียกยกเลิกยังได้ `OperationCanceledException` เหมือนเดิม
+- เทสต์ cancel ใน Phase4/5/6 ใช้ token ที่ยกเลิกเองตรง ๆ กับตัวปลอม ไม่ได้แข่งกับนาฬิกา

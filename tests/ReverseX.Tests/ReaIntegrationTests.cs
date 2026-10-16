@@ -105,6 +105,16 @@ public class ReaIntegrationTests
         await Assert.ThrowsAsync<TimeoutException>(() => client.ListToolsAsync());
     }
 
+    // A zero timeout has already expired before the request is written, which is the
+    // case the 1 ms test above only hits sometimes: the expiry lands inside SendAsync.
+    [ReaFact]
+    public async Task Client_RequestTimeout_ExpiringBeforeSend_IsStillTimeout()
+    {
+        await using var client = await ReaClient.StartAsync(Options(TimeSpan.Zero));
+        await Assert.ThrowsAsync<TimeoutException>(() => client.ListToolsAsync());
+        await Assert.ThrowsAsync<TimeoutException>(() => client.CallToolAsync("no_such_tool_xyz", timeout: TimeSpan.Zero));
+    }
+
     [ReaFact]
     public async Task Client_Cancellation_Throws()
     {

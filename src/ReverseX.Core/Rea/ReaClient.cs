@@ -165,21 +165,24 @@ public sealed class ReaClient : IAsyncDisposable
         _pending[id] = tcs;
         try
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-            await SendAsync(new JsonObject
-            {
-                ["jsonrpc"] = "2.0",
-                ["id"] = id,
-                ["method"] = method,
-                ["params"] = parameters,
-            }, cts.Token).ConfigureAwait(false);
-
+            // The timeout clock starts before the request is written, so it can expire while
+            // SendAsync waits for the write lock or the pipe. Both phases must report a timeout
+            // as TimeoutException; only the caller's own token means OperationCanceledException.
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
             try
             {
+                await SendAsync(new JsonObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = id,
+                    ["method"] = method,
+                    ["params"] = parameters,
+                }, cts.Token).ConfigureAwait(false);
+
                 return await tcs.Task.WaitAsync(cts.Token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested)
             {
                 throw new TimeoutException($"REA did not answer '{method}' within {timeout.TotalSeconds:0}s.");
             }
