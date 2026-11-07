@@ -289,4 +289,25 @@ public sealed class NativeCodeTests
         Assert.Equal(1, await first);
         Assert.True(cache.HasSession);
     }
+
+    [Fact]
+    public async Task Cache_DisposeDuringALongCall_EndsTheProcessWithoutWaiting()
+    {
+        // closing the app during Ghidra's first whole-file analysis: the app only waits a few seconds
+        using var h = new Harness();
+        var a = h.File("a.exe");
+        var cache = h.Cache();
+        var never = new TaskCompletionSource<int>();
+        var running = cache.RunAsync(a, (_, _) => never.Task, CancellationToken.None);
+        await Task.Delay(50);
+
+        var dispose = cache.DisposeAsync().AsTask();
+        Assert.Same(dispose, await Task.WhenAny(dispose, Task.Delay(TimeSpan.FromSeconds(5))));
+        Assert.True(h.Started[0].Disposed);
+        Assert.False(cache.HasSession);
+
+        never.SetException(new ReaException("The REA process has exited."));  // what the killed process gives the call
+        await Assert.ThrowsAsync<ReaException>(() => running);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => cache.RunAsync(a, (_, _) => Task.FromResult(1), CancellationToken.None));
+    }
 }

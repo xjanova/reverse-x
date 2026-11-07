@@ -48,6 +48,7 @@ public sealed class TargetSessionCache : IAsyncDisposable
                 try
                 {
                     if (_prepare is not null) await _prepare(session, path, ct).ConfigureAwait(false);
+                    ObjectDisposedException.ThrowIf(_disposed, this);  // the app closed while this one was starting
                 }
                 catch
                 {
@@ -57,7 +58,8 @@ public sealed class TargetSessionCache : IAsyncDisposable
                 _session = session;
                 _key = key;
             }
-            return await work(_session, ct).ConfigureAwait(false);
+            var live = _session ?? throw new ObjectDisposedException(nameof(TargetSessionCache));
+            return await work(live, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (IsBroken(ex))
         {
@@ -85,8 +87,7 @@ public sealed class TargetSessionCache : IAsyncDisposable
 
     private async Task DropAsync()
     {
-        var s = _session;
-        _session = null;
+        var s = Interlocked.Exchange(ref _session, null);
         _key = null;
         if (s is not null)
         {
@@ -111,17 +112,13 @@ public sealed class TargetSessionCache : IAsyncDisposable
         return full.ToUpperInvariant();
     }
 
+    /// <summary>
+    /// Ends the kept process now, without waiting for a call in progress (a first Ghidra analysis can run for many minutes and the
+    /// app gives shutdown only a few seconds): that call then fails as a dead process, and nothing new starts afterwards.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
-        await _gate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            _disposed = true;
-            await DropAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            _gate.Release();
-        }
+        _disposed = true;
+        await DropAsync().ConfigureAwait(false);
     }
 }

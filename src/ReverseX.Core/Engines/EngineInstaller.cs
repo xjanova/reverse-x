@@ -296,6 +296,15 @@ public sealed class EngineInstaller
     {
         if (string.IsNullOrEmpty(entryName)) return null;
         if (entryName[0] is '/' or '\\' || entryName.Contains(':') || entryName.Contains('\0') || Path.IsPathRooted(entryName)) return null;
+        // Windows trims a trailing dot or space from a name ("x." is "x", ".. " is ".."), so such segments are refused outright
+        // instead of trusting the normalized path below.
+        var segments = entryName.Split('/', '\\');
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var seg = segments[i];
+            if (seg.Length == 0 && i == segments.Length - 1) continue;  // "dir/" names a directory
+            if (seg.Trim().Length == 0 || seg.Trim() == ".." || seg.EndsWith('.') || seg.EndsWith(' ')) return null;
+        }
         string full;
         try { full = Path.GetFullPath(Path.Combine(rootPrefix, entryName)); }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }

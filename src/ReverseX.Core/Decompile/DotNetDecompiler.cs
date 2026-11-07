@@ -94,7 +94,28 @@ public sealed class DotNetDecompiler
     public string Decompile(string token, CancellationToken ct)
     {
         var handle = ParseToken(token);
+        // get_X / set_X / add_E / remove_E alone decompile to a bare "{ … }"; the property or event they belong to reads as C#
+        if (handle.Kind == HandleKind.MethodDefinition && AccessorOwner((MethodDefinitionHandle)handle) is { } owner) handle = owner;
         return Run(handle, ct);
+    }
+
+    private EntityHandle? AccessorOwner(MethodDefinitionHandle method)
+    {
+        var md = _file.Metadata;
+        var def = md.GetMethodDefinition(method);
+        if ((def.Attributes & System.Reflection.MethodAttributes.SpecialName) == 0) return null;
+        var type = md.GetTypeDefinition(def.GetDeclaringType());
+        foreach (var p in type.GetProperties())
+        {
+            var a = md.GetPropertyDefinition(p).GetAccessors();
+            if (a.Getter == method || a.Setter == method) return p;
+        }
+        foreach (var e in type.GetEvents())
+        {
+            var a = md.GetEventDefinition(e).GetAccessors();
+            if (a.Adder == method || a.Remover == method || a.Raiser == method) return e;
+        }
+        return null;
     }
 
     /// <summary>C# for the type that declares the given method token (the whole class around one method).</summary>

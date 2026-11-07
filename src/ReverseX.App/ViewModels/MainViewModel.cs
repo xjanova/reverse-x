@@ -126,6 +126,9 @@ public sealed class MainViewModel : ObservableObject
         switch (kind)
         {
             case FileKind.DotNet:
+                // The Binary page leaves a native file: its Ghidra process (often a GB or more) is no longer needed.
+                if (Backend is ReaAnalysisBackend rea && Binary.TargetKind is FileKind.Pe or FileKind.Elf or FileKind.MachO)
+                    _ = rea.ReleaseNativeAsync();
                 // The metadata view is read locally and is quick, so it is ready by the time the user opens the .NET page.
                 _ = Dotnet.OpenAsync(path, kind);
                 Select("Binary");

@@ -323,9 +323,10 @@ public sealed class AnalysisRunner
         }
 
         var name = info.ClassName;
-        var cut = name.LastIndexOf('.');
+        // the package comes from the DEX spelling (Outer$Inner): JADX's "pkg.Outer.Inner" cannot tell a class from a package
+        var cut = className.LastIndexOf('.');
         var sb = new StringBuilder();
-        if (cut > 0) sb.Append("package ").Append(name, 0, cut).Append(";\n\n");
+        if (cut > 0) sb.Append("package ").Append(className, 0, cut).Append(";\n\n");
         foreach (var f in info.Fields) sb.Append("    ").Append(f.Type).Append(' ').Append(f.Name).Append(";\n");
         if (info.Fields.Count > 0) sb.Append('\n');
 

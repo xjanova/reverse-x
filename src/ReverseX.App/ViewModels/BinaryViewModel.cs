@@ -45,6 +45,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private NativeCode? _nativeCode;
     private CancellationTokenSource? _dotnetCts;
     private CancellationTokenSource? _targetCts = new();
+    private string? _targetCtsPath;
     private Task<DotNetDecompiler>? _decompiler;
     private string? _decompilerPath;
 
@@ -504,9 +505,18 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private void ResetCode()
     {
         _codeRun++;
-        _targetCts?.Cancel();
-        _targetCts = new CancellationTokenSource();
+        // The native token outlives a Reanalyze or a snapshot reload of the same file: cancelling a request that is waiting for
+        // Ghidra's whole-file analysis makes REA throw that analysis away. Only a different file cancels it.
+        if (_targetCts is null || !string.Equals(_targetCtsPath, TargetPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _targetCts?.Cancel();
+            _targetCts?.Dispose();
+            _targetCts = new CancellationTokenSource();
+            _targetCtsPath = TargetPath;
+        }
         _dotnetCts?.Cancel();
+        _dotnetCts?.Dispose();
+        _dotnetCts = null;
         _decompiler = null;
         _decompilerPath = null;
         _nativeCode = null;
@@ -557,10 +567,12 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             {
                 // a new click may cancel the previous decompile: it holds nothing worth keeping
                 _dotnetCts?.Cancel();
+                _dotnetCts?.Dispose();
                 var cts = _dotnetCts = CancellationTokenSource.CreateLinkedTokenSource(_targetCts?.Token ?? CancellationToken.None);
+                var token = cts.Token;  // read once: a newer click disposes cts
                 var whole = _wholeType;
                 var dec = await DecompilerFor(path).ConfigureAwait(true);
-                var text = await Task.Run(() => whole ? dec.DecompileDeclaringType(method.Token, cts.Token) : dec.Decompile(method.Token, cts.Token), cts.Token)
+                var text = await Task.Run(() => whole ? dec.DecompileDeclaringType(method.Token, token) : dec.Decompile(method.Token, token), token)
                     .ConfigureAwait(true);
                 if (run != _codeRun) return;
                 CodeText = text;

@@ -131,13 +131,14 @@ public sealed class AndroidJavaTests
         {
             Handler = (tool, args) => tool == "inspect_android_class"
                 ? Arg(args, "class_name") == "com.example.app.MainActivity.Inner"
-                    ? Ok(Fx("android-class-jadx.json"))
+                    ? Ok(Fx("android-class-jadx.json").Replace("\"com.example.app.MainActivity\"", "\"com.example.app.MainActivity.Inner\"", StringComparison.Ordinal))
                     : Err(Fx("android-class-missing.json"))
                 : Ok(Fx("android-method-jadx.json")),
         };
-        await new AnalysisRunner(rea).AndroidClassJavaAsync(Apk, "com.example.app.MainActivity$Inner", null, CancellationToken.None);
+        var code = await new AnalysisRunner(rea).AndroidClassJavaAsync(Apk, "com.example.app.MainActivity$Inner", null, CancellationToken.None);
         Assert.Equal(new[] { "com.example.app.MainActivity$Inner", "com.example.app.MainActivity.Inner" },
             rea.Calls.Where(c => c.Tool == "inspect_android_class").Select(c => Arg(c.Args, "class_name")));
+        Assert.StartsWith("package com.example.app;\n", code.Text);  // not "package com.example.app.MainActivity;"
     }
 
     [Fact]

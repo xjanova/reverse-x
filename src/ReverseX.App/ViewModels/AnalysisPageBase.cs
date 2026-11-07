@@ -90,11 +90,12 @@ public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
         await _android.ResetAsync().ConfigureAwait(false);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        try { await _native.DisposeAsync().ConfigureAwait(false); }
-        finally { await _android.DisposeAsync().ConfigureAwait(false); }
-    }
+    /// <summary>Both kept processes end in parallel: each may need its few-second grace before it is killed.</summary>
+    public async ValueTask DisposeAsync() =>
+        await Task.WhenAll(_native.DisposeAsync().AsTask(), _android.DisposeAsync().AsTask()).ConfigureAwait(false);
+
+    /// <summary>The Binary page moved to a file that is not native: free the Ghidra process (and its memory) kept for the old one.</summary>
+    public Task ReleaseNativeAsync() => _native.ResetAsync();
 }
 
 /// <summary>Shared run logic: snapshot first, otherwise a cancellable background analysis with progress. Never throws to the UI.</summary>

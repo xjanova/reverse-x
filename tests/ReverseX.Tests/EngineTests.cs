@@ -391,6 +391,10 @@ public sealed class EngineTests : IDisposable
     [InlineData("C:/evil.txt")]
     [InlineData("C:evil.txt")]
     [InlineData("jdk-21.0.13+9/bin/java.exe:evil.txt")]
+    [InlineData("jdk-21.0.13+9/.. /.. /evil.txt")]   // Windows trims the space: ".." again
+    [InlineData("jdk-21.0.13+9/.../evil.txt")]       // trailing dots trimmed too
+    [InlineData("jdk-21.0.13+9/bin./evil.txt")]
+    [InlineData("jdk-21.0.13+9//evil.txt")]
     public async Task Install_UnsafeZipEntry_IsBadArchive_AndWritesNothing(string evil)
     {
         var body = Zip(("jdk-21.0.13+9/bin/java.exe", "MZ"u8.ToArray()), (evil, "pwned"u8.ToArray()));

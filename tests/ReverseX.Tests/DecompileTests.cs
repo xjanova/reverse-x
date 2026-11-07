@@ -40,6 +40,16 @@ public sealed class DecompileTests : IDisposable
     }
 
     [Fact]
+    public void PropertyGetter_DecompilesAsItsProperty()
+    {
+        var getter = typeof(DecompileTests).GetProperty(nameof(OwnAssembly), BindingFlags.NonPublic | BindingFlags.Static)?.GetMethod
+                     ?? throw new InvalidOperationException("property missing");
+        var code = DotNetDecompiler.Open(OwnAssembly).Decompile(TokenOf(getter), CancellationToken.None);
+        Assert.Contains("string OwnAssembly", code);
+        Assert.Contains("typeof(DecompileTests).Assembly.Location", code);
+    }
+
+    [Fact]
     public void DeclaringType_DecompilesTheWholeClass()
     {
         var d = DotNetDecompiler.Open(OwnAssembly);
