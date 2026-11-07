@@ -15,6 +15,7 @@ public sealed class NativeCodeTests
     private sealed class FakeSession : IReaSession
     {
         public List<string> Calls { get; } = new();
+        public List<TimeSpan> Timeouts { get; } = new();
         public Func<string, JsonNode, CancellationToken, Task<ReaToolResult>> Handler { get; init; } =
             (_, _, _) => Task.FromResult(new ReaToolResult(false, "{}", default));
         public bool Disposed { get; private set; }
@@ -22,6 +23,7 @@ public sealed class NativeCodeTests
         public Task<ReaToolResult> CallAsync(string tool, JsonNode args, TimeSpan timeout, CancellationToken ct)
         {
             Calls.Add(tool + " " + args.ToJsonString());
+            Timeouts.Add(timeout);
             return Handler(tool, args, ct);
         }
 
@@ -126,6 +128,7 @@ public sealed class NativeCodeTests
     public void ParseAddressList_RealCallees_KeepsImportsInEngineOrder()
     {
         var (addresses, _, _) = ReaResultParser.ParseAddressList(Fx("native-callees-ghidra.json"));
+        Assert.NotNull(addresses);
         Assert.Equal(8, addresses.Count);
         Assert.Equal(new[] { "EXTERNAL:0x14", "EXTERNAL:0x16", "EXTERNAL:0x4b" }, addresses.Take(3));
         Assert.Equal("0x140009010", addresses[^1]);
@@ -135,6 +138,7 @@ public sealed class NativeCodeTests
     public void ParseAddressList_RealNoCallers_IsEmpty()
     {
         var (addresses, _, provider) = ReaResultParser.ParseAddressList(Fx("native-callers-none.json"));
+        Assert.NotNull(addresses);  // the engine's real "nobody calls it" is an empty list, not an unreadable answer
         Assert.Empty(addresses);
         Assert.Equal("Ghidra 12.1.4", provider);
     }
@@ -142,13 +146,16 @@ public sealed class NativeCodeTests
     [Theory]
     [InlineData("{\"raw_result\":[\"0x1\",\"0x2\",\"0x1\"]}", 2)]  // no normalized_result: the raw list, each address once
     [InlineData("{\"raw_result\":{\"value\":[\"0x1\"],\"limitations\":[]}}", 1)]
+    [InlineData("{\"normalized_result\":{\"value\":[\"0x7\"]},\"raw_result\":\"text\"}", 1)]
     [InlineData("{\"normalized_result\":[1,null,\"\",\"0x5\"]}", 1)]
-    [InlineData("{\"normalized_result\":null}", 0)]
-    [InlineData("{}", 0)]
-    [InlineData("not json", 0)]
-    public void ParseAddressList_OddShapes_NeverThrow(string json, int count)
+    [InlineData("{\"normalized_result\":[]}", 0)]
+    // no list at all is "unreadable", not "nothing calls it"
+    [InlineData("{\"normalized_result\":null}", null)]
+    [InlineData("{}", null)]
+    [InlineData("not json", null)]
+    public void ParseAddressList_OddShapes_NeverThrow(string json, int? count)
     {
-        Assert.Equal(count, ReaResultParser.ParseAddressList(json).Addresses.Count);
+        Assert.Equal(count, ReaResultParser.ParseAddressList(json).Addresses?.Count);
     }
 
     [Fact]
@@ -169,6 +176,19 @@ public sealed class NativeCodeTests
         Assert.Equal(8, refs.Callees.Count);
         Assert.Equal("Ghidra 12.1.4", refs.Provider);
         Assert.Single(refs.Limitations, l => l.Contains("indirect calls", StringComparison.Ordinal));  // both answers carry it; listed once
+        Assert.All(rea.Timeouts, t => Assert.Equal(AnalysisRunner.NativeRefsTimeout, t));  // not the half-hour analysis wait
+    }
+
+    [Fact]
+    public async Task Runner_NativeRefs_UnreadableAnswer_IsAFailureNotAnEmptyList()
+    {
+        var rea = new FakeSession
+        {
+            Handler = (tool, _, _) => Task.FromResult(tool == "procedure_callers" ? Ok(Fx("native-callers-ghidra.json")) : Ok("{\"normalized_result\":null}")),
+        };
+        var ex = await Assert.ThrowsAsync<AnalysisFailure>(() => new AnalysisRunner(rea).NativeRefsAsync("0x140001140", CancellationToken.None));
+        Assert.Equal(AnalysisFailureKind.Generic, ex.Kind);
+        Assert.Contains("procedure_callees", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -671,7 +671,10 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
                 refsNext = true;
             }
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            if (run == _codeRun) RefsBusy = false;
+        }
         catch (Exception ex)
         {
             AppPaths.Log("Code view failed: " + path + " " + item.Key, ex);
@@ -679,9 +682,12 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             CodeText = "";
             CodeNote = Loc.Get(CodeErrorKey(ex));
             // The decompiler can fail on one function while its references are fine. A dead or timed-out engine, a missing one
-            // or an address it does not know would only fail again (or restart the whole analysis), so the refs are not asked.
+            // or an address it does not know would only fail again (or restart the whole analysis), so the refs are not asked;
+            // refs already shown for this function (from the other code view) stay.
             refsNext = ex is AnalysisFailure { Kind: AnalysisFailureKind.Generic or AnalysisFailureKind.TooLarge };
-            if (!refsNext && native is not null) ShowRefs(native.Address, null, "Nat.Refs.Err");
+            if (!refsNext && native is not null && !(_refsFor == native.Address && _nativeRefs is not null))
+                ShowRefs(native.Address, null,
+                    ex is AnalysisFailure { Kind: AnalysisFailureKind.InputRejected or AnalysisFailureKind.NotSupported } ? "Nat.Refs.NoCode" : "Nat.Refs.Err");
         }
         finally
         {
@@ -711,7 +717,8 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     {
         if (_refsFor == proc.Address && _nativeRefs is not null) return;
         var cache = _refsCache;
-        if (!cache.TryGetValue(proc.Address, out var task))
+        // a failed task may still be here for a moment (its own continuation removes it): never reuse one
+        if (!cache.TryGetValue(proc.Address, out var task) || task.IsFaulted || task.IsCanceled)
         {
             var ct = _targetCts?.Token ?? CancellationToken.None;
             task = Task.Run(() => Backend.NativeRefsAsync(path, proc.Address, ct), ct);
@@ -727,7 +734,11 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         {
             // a failed lookup is not kept: picking the function again asks once more
             if (cache.TryGetValue(proc.Address, out var t) && t == task) cache.Remove(proc.Address);
-            if (ex is OperationCanceledException) return;
+            if (ex is OperationCanceledException)
+            {
+                if (run == _codeRun) RefsBusy = false;
+                return;
+            }
             AppPaths.Log("Native refs failed: " + path + " " + proc.Address, ex);
             if (run != _codeRun) return;
             ShowRefs(proc.Address, null, "Nat.Refs.Err");

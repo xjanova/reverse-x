@@ -217,6 +217,7 @@
     <sys:String x:Key="S.Nat.NoRefs">เลือกฟังก์ชันทางซ้าย แล้วจะเห็นว่าใครเรียกฟังก์ชันนั้น และฟังก์ชันนั้นเรียกอะไรบ้าง</sys:String>
     <sys:String x:Key="S.Nat.Refs.Loading">กำลังหาว่าใครเรียกฟังก์ชันนี้และฟังก์ชันนี้เรียกอะไร… จะเริ่มถามเอนจินหลังโค้ดโหลดเสร็จ</sys:String>
     <sys:String x:Key="S.Nat.Refs.Err">ขอรายการเรียกของฟังก์ชันนี้จากเอนจินไม่สำเร็จ · เลือกฟังก์ชันนี้อีกครั้งเพื่อลองใหม่</sys:String>
+    <sys:String x:Key="S.Nat.Refs.NoCode">เอนจินอ่านฟังก์ชันนี้ไม่ได้ จึงไม่มีรายการเรียกด้วย · ดูหมายเหตุตรงกลาง</sys:String>
     <sys:String x:Key="S.Nat.Refs.Import">ฟังก์ชันนี้เป็น import จาก DLL อื่น ไม่มีโค้ดอยู่ในไฟล์นี้ จึงไม่มีรายการเรียกให้ดู</sys:String>
     <sys:String x:Key="S.Nat.Refs.Callers">ถูกเรียกจาก ({0})</sys:String>
     <sys:String x:Key="S.Nat.Refs.Callees">เรียกไปยัง ({0})</sys:String>

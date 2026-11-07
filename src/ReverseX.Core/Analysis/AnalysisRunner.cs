@@ -45,6 +45,11 @@ public sealed class AnalysisRunner
     private static readonly TimeSpan Long = TimeSpan.FromMinutes(5);
     /// <summary>The first native query waits for Ghidra's import + auto-analysis, which takes minutes on a large binary.</summary>
     public static readonly TimeSpan NativeLong = TimeSpan.FromMinutes(30);
+    /// <summary>
+    /// Callers / callees are asked only after the function's code has loaded (the analysis is done), and Ghidra reads them from it:
+    /// a call this slow is a stuck engine, and the next click should not wait half an hour behind it.
+    /// </summary>
+    public static readonly TimeSpan NativeRefsTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IReaToolCaller _rea;
     private readonly Func<string, CancellationToken, Task<string>>? _managedMembersCli;
@@ -273,15 +278,18 @@ public sealed class AnalysisRunner
 
     /// <summary>
     /// Who calls one function and what it calls (procedure_callers, then procedure_callees). Ghidra answers both from its finished
-    /// analysis without decompiling, so they are quick once the function's code has loaded. Errors map as in NativeCodeAsync.
+    /// analysis without decompiling, so they are quick once the function's code has loaded. Errors map as in NativeCodeAsync; an
+    /// answer with no address list is a Generic failure, never an empty list (that would read as "nothing calls it").
     /// </summary>
     public async Task<NativeRefs> NativeRefsAsync(string procedure, CancellationToken ct)
     {
-        var callersText = await CallTextAsync("procedure_callers", new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        var callersText = await CallTextAsync("procedure_callers", new JsonObject { ["procedure"] = procedure }, NativeRefsTimeout, ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
-        var calleesText = await CallTextAsync("procedure_callees", new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        var calleesText = await CallTextAsync("procedure_callees", new JsonObject { ["procedure"] = procedure }, NativeRefsTimeout, ct).ConfigureAwait(false);
         var callers = ReaResultParser.ParseAddressList(callersText);
         var callees = ReaResultParser.ParseAddressList(calleesText);
+        if (callers.Addresses is null || callees.Addresses is null)
+            throw new AnalysisFailure(AnalysisFailureKind.Generic, (callers.Addresses is null ? "procedure_callers" : "procedure_callees") + ": unreadable result");
         var limits = callers.Limitations.Concat(callees.Limitations).Distinct(StringComparer.Ordinal).ToList();
         return new NativeRefs(callers.Addresses, callees.Addresses, limits, callers.Provider.Length > 0 ? callers.Provider : callees.Provider);
     }

@@ -383,27 +383,29 @@ public static class ReaResultParser
 
     /// <summary>
     /// procedure_callers / procedure_callees: normalized_result is a plain array of function entry addresses (raw_result is the same
-    /// array as the Ghidra bridge sent it). Never throws on shape; anything unreadable gives an empty list.
+    /// array as the Ghidra bridge sent it). Never throws on shape; Addresses is null when no list can be found (unreadable, not "none").
     /// </summary>
-    public static (List<string> Addresses, List<string> Limitations, string Provider) ParseAddressList(string json)
+    public static (List<string>? Addresses, List<string> Limitations, string Provider) ParseAddressList(string json)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
             var ev = Unwrap(doc.RootElement);
-            var list = Prop(ev, "normalized_result");
-            if (list.ValueKind != JsonValueKind.Array) list = Prop(ev, "raw_result");
-            if (list.ValueKind == JsonValueKind.Object) list = Prop(list, "value");
+            var list = ListIn(Prop(ev, "normalized_result"));
+            if (list.ValueKind != JsonValueKind.Array) list = ListIn(Prop(ev, "raw_result"));
             var addresses = list.ValueKind == JsonValueKind.Array
                 ? list.EnumerateArray().Where(a => a.ValueKind == JsonValueKind.String).Select(a => a.GetString()!)
                     .Where(a => a.Length > 0).Distinct(StringComparer.Ordinal).ToList()
-                : new List<string>();
+                : null;
             return (addresses, Strings(ev, "limitations"), ProviderOf(ev));
         }
         catch (JsonException)
         {
-            return (new List<string>(), new List<string>(), "");
+            return (null, new List<string>(), "");
         }
+
+        // a plain array, or one wrapped as { "value": [...] }
+        static JsonElement ListIn(JsonElement e) => e.ValueKind == JsonValueKind.Object ? Prop(e, "value") : e;
     }
 
     // ───────────── Android (JADX headless MCP) ─────────────

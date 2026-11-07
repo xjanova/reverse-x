@@ -217,6 +217,7 @@
     <sys:String x:Key="S.Nat.NoRefs">Pick a function on the left to see who calls it and what it calls</sys:String>
     <sys:String x:Key="S.Nat.Refs.Loading">Looking up who calls this function and what it calls… the engine is asked once the code has loaded</sys:String>
     <sys:String x:Key="S.Nat.Refs.Err">Could not get this function's call list from the engine · pick the function again to retry</sys:String>
+    <sys:String x:Key="S.Nat.Refs.NoCode">The engine could not read this function, so it has no call list either · see the note in the middle</sys:String>
     <sys:String x:Key="S.Nat.Refs.Import">This function is imported from another DLL — its code is not in this file, so it has no call list here</sys:String>
     <sys:String x:Key="S.Nat.Refs.Callers">Called by ({0})</sys:String>
     <sys:String x:Key="S.Nat.Refs.Callees">Calls ({0})</sys:String>

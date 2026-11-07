@@ -252,11 +252,12 @@ public sealed class BinaryRefsTests
     });
 
     [Theory]
-    [InlineData(AnalysisFailureKind.Generic, true)]          // the decompiler gave up on this one function: its refs are still there
-    [InlineData(AnalysisFailureKind.Timeout, false)]         // the engine session was dropped: asking again restarts the analysis
-    [InlineData(AnalysisFailureKind.ReaUnavailable, false)]
-    [InlineData(AnalysisFailureKind.InputRejected, false)]   // no function at that address
-    public void Refs_AfterACodeFailure_OnlyWhenTheEngineCanStillAnswer(AnalysisFailureKind kind, bool asked) => UiThread.Run(async () =>
+    [InlineData(AnalysisFailureKind.Generic, true, null)]                  // the decompiler gave up on this one function: its refs are still there
+    [InlineData(AnalysisFailureKind.Timeout, false, "Nat.Refs.Err")]       // the engine session was dropped: picking it again retries
+    [InlineData(AnalysisFailureKind.ReaUnavailable, false, "Nat.Refs.Err")]
+    [InlineData(AnalysisFailureKind.InputRejected, false, "Nat.Refs.NoCode")]  // no function at that address: a retry cannot help
+    [InlineData(AnalysisFailureKind.NotSupported, false, "Nat.Refs.NoCode")]
+    public void Refs_AfterACodeFailure_OnlyWhenTheEngineCanStillAnswer(AnalysisFailureKind kind, bool asked, string? note) => UiThread.Run(async () =>
     {
         using var p = new Page();
         await p.OpenAsync();
@@ -265,7 +266,28 @@ public sealed class BinaryRefsTests
         await UiThread.Settle();
         Assert.Equal(asked, p.Backend.Calls.Contains("refs " + Entry));
         Assert.Equal(asked, p.Vm.RefsBusy);
-        if (!asked) Assert.Equal("Nat.Refs.Err", p.Vm.NoRefsText);
+        if (note is not null) Assert.Equal(note, p.Vm.NoRefsText);
+    });
+
+    [Fact]
+    public void AssemblyFailure_KeepsTheRefsAlreadyShown() => UiThread.Run(async () =>
+    {
+        using var p = new Page();
+        await p.OpenAsync();
+        p.Backend.Code(Entry, "entry code");
+        await UiThread.Until(() => p.Backend.Calls.Contains("refs " + Entry), "the refs request");
+        p.Backend.Refs(Entry, Array.Empty<string>(), new[] { Main });
+        await UiThread.Until(() => !p.Vm.RefsBusy, "refs shown");
+
+        // the assembly view fails with an error that drops the session: the refs on screen are still this function's
+        p.Vm.ViewAsm = true;
+        await UiThread.Until(() => p.Backend.Calls.Contains("code " + Entry + " asm"), "the assembly request");
+        p.Backend.CodeFail(Entry + " asm", new AnalysisFailure(AnalysisFailureKind.Timeout, "engine said no"));
+        await UiThread.Until(() => !p.Vm.CodeBusy, "the assembly error");
+        await UiThread.Settle();
+        Assert.Equal(BinaryViewModel.CalleeMark, p.Row("FUN_140001140").Kind);
+        Assert.False(p.Vm.RefsBusy);
+        Assert.Equal(1, p.Count("refs " + Entry));
     });
 
     [Fact]
