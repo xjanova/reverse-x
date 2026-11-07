@@ -13,7 +13,13 @@ namespace ReverseX.App.ViewModels;
 public sealed record SymbolItem(string Name, string Sub, string Key, DotNetMethod? Method, NativeProcedure? Proc);
 public sealed record MetaRow(string Label, string Value);
 public sealed record CilRow(string Offset, string Opcode, string Operand, string Kind);
-public sealed record RefRow(string Text, string Kind);
+/// <param name="Target">The function a native row opens in the list; null for .NET rows, headers, imports and addresses not in the list.</param>
+public sealed record RefRow(string Text, string Kind, string Sub = "", SymbolItem? Target = null, bool IsHeader = false)
+{
+    public bool IsRow => !IsHeader;
+    public bool HasSub => Sub.Length > 0;
+    public bool CanOpen => Target is not null;
+}
 public sealed record EvidenceRow(EvidenceLevel Level, string Badge, string Text);
 
 public enum BinTab { Code, Cil, Meta, Go, Native }
@@ -24,6 +30,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     public const string GuideUrl = "https://github.com/morluto/rea#readme";
     private const int MaxCilRows = 3000;
     private const int MaxListRows = 20000;
+    private const int MaxRefRows = 500;
+    /// <summary>Kind column of native ref rows: a function that calls the selected one, or one it calls.</summary>
+    public const string CallerMark = "←", CalleeMark = "→";
 
     private readonly Func<string, Task>? _open;
     private IReadOnlyList<SymbolItem> _all = Array.Empty<SymbolItem>();
@@ -49,6 +58,15 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private Task<DotNetDecompiler>? _decompiler;
     private string? _decompilerPath;
 
+    // refs pane (native): who calls the selected function and what it calls
+    private IReadOnlyDictionary<string, SymbolItem> _byAddress = new Dictionary<string, SymbolItem>();
+    // one lookup per function and file; a task so a request still in flight is shared, not sent twice
+    private Dictionary<string, Task<NativeRefs>> _refsCache = new(StringComparer.Ordinal);
+    private NativeRefs? _nativeRefs;
+    private string? _refsFor;
+    private string? _refsNoteKey;
+    private bool _refsBusy;
+
     // export
     private bool _exportBusy;
     private string _exportText = "";
@@ -71,6 +89,8 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         CopyCodeCommand = new RelayCommand(CopyCode, () => _codeText.Length > 0);
         ExportCommand = new RelayCommand(() => { _ = ExportAsync(); }, () => IsDotNet && IsReady && !_exportBusy);
         CancelExportCommand = new RelayCommand(() => _exportCts?.Cancel(), () => _exportBusy);
+        // no CanExecute: WPF may ask it before the row's CommandParameter is bound; the row's CanOpen enables the button instead
+        OpenRefCommand = new RelayCommand(p => OpenRef(p as RefRow));
     }
 
     protected override string TitleKey => "Bin.Title";
@@ -86,6 +106,8 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     public ICommand CopyCodeCommand { get; }
     public ICommand ExportCommand { get; }
     public ICommand CancelExportCommand { get; }
+    /// <summary>A native ref row: select that function in the list (and show its code).</summary>
+    public ICommand OpenRefCommand { get; }
 
     // ───────── state shown by the page ─────────
 
@@ -229,8 +251,11 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     public IReadOnlyList<RefRow> Refs { get; private set; } = Array.Empty<RefRow>();
     public bool HasRefs => Refs.Count > 0;
-    /// <summary>Why the list is empty: native calls are read from the code itself, and a locally built .NET list has no CIL anchors.</summary>
-    public string NoRefsText => Loc.Get(IsNative ? "Nat.NoRefs" : _dotnet is { BuiltLocally: true } ? "Bin.NoRefsLocal" : "Bin.NoRefs");
+    public string RefsTitle => Loc.Get(IsNative ? "Nat.Refs" : "Bin.Refs");
+    /// <summary>Native: the engine lookup runs after the code has loaded; only this card shows that it is busy.</summary>
+    public bool RefsBusy { get => _refsBusy; private set => Set(ref _refsBusy, value); }
+    /// <summary>Why the list is empty: native refs still loading, failed or not asked for; a locally built .NET list has no CIL anchors.</summary>
+    public string NoRefsText => Loc.Get(IsNative ? _refsNoteKey ?? "Nat.NoRefs" : _dotnet is { BuiltLocally: true } ? "Bin.NoRefsLocal" : "Bin.NoRefs");
     public IReadOnlyList<EvidenceRow> Evidence { get; private set; } = Array.Empty<EvidenceRow>();
     public string SelectedTitle => _selected is null ? "" : _selected.Name;
     public string SelectedSub => _selected?.Sub ?? "";
@@ -242,6 +267,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         _dotnet = null; _native = null; _go = null;
         _all = Array.Empty<SymbolItem>();
         _view = Array.Empty<SymbolItem>();
+        _byAddress = new Dictionary<string, SymbolItem>();
         _selected = null;
         ResetCode();
         RaiseAll();
@@ -272,6 +298,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
                 .Take(MaxListRows)
                 .Select(p => new SymbolItem(p.Name, SubFor(p), p.Address, null, p))
                 .ToList();
+            _byAddress = IndexByAddress(_all);
             _tab = ShowNoEngine || _all.Count == 0 ? BinTab.Native : BinTab.Code;
         }
         _search = "";
@@ -308,6 +335,15 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private string SubFor(NativeProcedure p) =>
         p.External ? Loc.Get("Nat.Import") : p.Thunk ? p.Address + " · " + Loc.Get("Nat.Thunk") : p.Address;
 
+    /// <summary>Engine refs are bare entry addresses; the list gives them names and makes them clickable.</summary>
+    private static Dictionary<string, SymbolItem> IndexByAddress(IReadOnlyList<SymbolItem> all)
+    {
+        var map = new Dictionary<string, SymbolItem>(StringComparer.Ordinal);
+        foreach (var i in all)
+            if (i.Proc is { } p) map.TryAdd(p.Address, i);
+        return map;
+    }
+
     protected override void OnStateChanged()
     {
         Raise(nameof(ShowEmpty)); Raise(nameof(ShowSymbolPanes)); Raise(nameof(ShowCenterPlain));
@@ -316,13 +352,14 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     protected override void OnLanguageChanged()
     {
-        Raise(nameof(NoEngineTitle)); Raise(nameof(NoEngineBody)); Raise(nameof(NoRefsText));
+        Raise(nameof(NoEngineTitle)); Raise(nameof(NoEngineBody)); Raise(nameof(NoRefsText)); Raise(nameof(RefsTitle));
         if (Snapshot is null) return;
         BuildStatic();
         if (_native is not null)
         {
             var sel = _selected?.Key;
             _all = _all.Select(i => i.Proc is { } p ? i with { Sub = SubFor(p) } : i).ToList();
+            _byAddress = IndexByAddress(_all);
             _view = Filter(_all, _search);
             _selected = sel is null ? null : _view.FirstOrDefault(i => i.Key == sel);
         }
@@ -456,11 +493,22 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
                 ev.Add(Row(EvidenceLevel.Inferred, Loc.Format("Bin.Sum.Derived", d.Info.Confidence)));
             foreach (var l in Limitations.Take(2)) ev.Add(Row(EvidenceLevel.Unknown, l));
         }
-        else if (_native is not null && _selected?.Proc is { } p && _nativeCode is { } code)
+        else if (_native is not null && _selected?.Proc is { } p)
         {
-            // What the engine itself says about the text on screen: it is the engine's reconstruction, with its own caveats.
-            ev.Add(Row(EvidenceLevel.Inferred, Loc.Format(_nativeView == NativeCodeView.Assembly ? "Nat.Sum.Asm" : "Nat.Sum.Pseudo", p.Name, code.Provider)));
-            foreach (var l in code.Limitations.Take(3)) ev.Add(Row(EvidenceLevel.Unknown, l));
+            if (_nativeCode is { } code)
+            {
+                // What the engine itself says about the text on screen: it is the engine's reconstruction, with its own caveats.
+                ev.Add(Row(EvidenceLevel.Inferred, Loc.Format(_nativeView == NativeCodeView.Assembly ? "Nat.Sum.Asm" : "Nat.Sum.Pseudo", p.Name, code.Provider)));
+                foreach (var l in code.Limitations.Take(3)) ev.Add(Row(EvidenceLevel.Unknown, l));
+            }
+            if (_nativeRefs is { } r && _refsFor == p.Address)
+            {
+                AddRefGroup(refs, "Nat.Refs.Callers", r.Callers, CallerMark);
+                AddRefGroup(refs, "Nat.Refs.Callees", r.Callees, CalleeMark);
+                // references are read straight from the engine's analysis (not reconstructed), but only the ones it could resolve
+                ev.Add(Row(EvidenceLevel.Seen, Loc.Format("Nat.Sum.Refs", p.Name, r.Callers.Count, r.Callees.Count, r.Provider)));
+                ev.Add(Row(EvidenceLevel.Unknown, Loc.Get("Nat.Sum.RefsIndirect")));
+            }
         }
 
         CilRows = cil;
@@ -469,6 +517,25 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         Raise(nameof(CilRows)); Raise(nameof(CilHeader)); Raise(nameof(CilNote));
         Raise(nameof(Refs)); Raise(nameof(HasRefs)); Raise(nameof(Evidence));
         Raise(nameof(SelectedTitle)); Raise(nameof(SelectedSub));
+    }
+
+    /// <summary>A header, then one row per address: the list's name when it has one (own functions first, imports last).</summary>
+    private void AddRefGroup(List<RefRow> rows, string titleKey, IReadOnlyList<string> addresses, string arrow)
+    {
+        rows.Add(new RefRow(Loc.Format(titleKey, addresses.Count), "", IsHeader: true));
+        if (addresses.Count == 0)
+        {
+            rows.Add(new RefRow(Loc.Get("Nat.Refs.Empty"), ""));
+            return;
+        }
+        var known = addresses.Select(a => (Address: a, Item: _byAddress.GetValueOrDefault(a))).OrderBy(x => x.Item?.Proc?.External ?? false);
+        foreach (var (a, item) in known.Take(MaxRefRows))
+        {
+            if (item is null) rows.Add(new RefRow(a, arrow, Loc.Get("Nat.Refs.NotListed")));
+            // an import has no code in this file: shown, never opened
+            else rows.Add(new RefRow(item.Name, arrow, item.Sub, item.Proc is { External: true } ? null : item));
+        }
+        if (addresses.Count > MaxRefRows) rows.Add(new RefRow(Loc.Format("Nat.Refs.More", addresses.Count - MaxRefRows), ""));
     }
 
     private void RaiseAll()
@@ -481,7 +548,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             nameof(AllCountText), nameof(TypeCountText), nameof(HasTypeCount), nameof(ListNote), nameof(SearchHint), nameof(Selected),
             nameof(Tab), nameof(TabCode), nameof(TabCil), nameof(TabMeta), nameof(TabGo), nameof(TabNative),
             nameof(ShowCode), nameof(ShowCil), nameof(ShowMeta), nameof(ShowGo), nameof(ShowNativeInfo), nameof(ShowSelectionHeader),
-            nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons), nameof(NoRefsText),
+            nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons), nameof(NoRefsText), nameof(RefsTitle), nameof(RefsBusy),
             nameof(GoRows), nameof(GoDeps), nameof(GoSettings), nameof(GoDepsTitle), nameof(TargetName),
         }) Raise(n);
     }
@@ -523,6 +590,11 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         CodeText = "";
         CodeNote = "";
         CodeBusy = false;
+        _refsCache = new(StringComparer.Ordinal);
+        _nativeRefs = null;
+        _refsFor = null;
+        _refsNoteKey = null;
+        RefsBusy = false;
     }
 
     private Task<DotNetDecompiler> DecompilerFor(string path)
@@ -547,20 +619,24 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             CodeText = "";
             CodeNote = HasSymbols ? Loc.Get(IsNative ? "Nat.Pick" : "Code.Pick") : "";
             CodeBusy = false;
+            if (IsNative) ShowRefs(null, null, null);
             return;
         }
-        if (item.Proc is { External: true })
+        if (item.Proc is { External: true } import)
         {
             CodeText = "";
             CodeNote = Loc.Get("Code.Import");
             CodeBusy = false;
-            RebuildSelection();
+            ShowRefs(import.Address, null, "Nat.Refs.Import");
             return;
         }
 
         CodeBusy = true;
         CodeText = "";
         CodeNote = Loc.Get(item.Method is not null ? "Code.Loading.Net" : "Code.Loading.Native");
+        var native = item.Proc;
+        if (native is not null) BeginRefs(native);
+        var refsNext = false;
         try
         {
             if (item.Method is { } method)
@@ -592,6 +668,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
                     ? Loc.Format(view == NativeCodeView.Assembly ? "Code.Source.Asm" : "Code.Source.Pseudo", code.Provider)
                     : Loc.Get("Code.Empty");
                 RebuildSelection();
+                refsNext = true;
             }
         }
         catch (OperationCanceledException) { }
@@ -601,11 +678,78 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             if (run != _codeRun) return;
             CodeText = "";
             CodeNote = Loc.Get(CodeErrorKey(ex));
+            // The decompiler can fail on one function while its references are fine. A dead or timed-out engine, a missing one
+            // or an address it does not know would only fail again (or restart the whole analysis), so the refs are not asked.
+            refsNext = ex is AnalysisFailure { Kind: AnalysisFailureKind.Generic or AnalysisFailureKind.TooLarge };
+            if (!refsNext && native is not null) ShowRefs(native.Address, null, "Nat.Refs.Err");
         }
         finally
         {
             if (run == _codeRun) CodeBusy = false;
         }
+        // after the code, never before it: requests on the engine session run one at a time
+        if (refsNext && run == _codeRun && native is not null) await LoadRefsAsync(run, native, path).ConfigureAwait(true);
+    }
+
+    // ───────── refs (native) ─────────
+
+    /// <summary>Known refs show at once (a function opened before, or the other code view); otherwise the card says it is busy.</summary>
+    private void BeginRefs(NativeProcedure proc)
+    {
+        if (_refsFor == proc.Address && _nativeRefs is not null) return;
+        if (_refsCache.TryGetValue(proc.Address, out var known) && known.IsCompletedSuccessfully)
+            ShowRefs(proc.Address, known.Result, null);
+        else
+            ShowRefs(proc.Address, null, "Nat.Refs.Loading", busy: true);
+    }
+
+    /// <summary>
+    /// Asks the engine once per function. Like the code request it is NOT cancelled by the next click (only by another file): a
+    /// result for an older selection is kept in the cache and simply not shown.
+    /// </summary>
+    private async Task LoadRefsAsync(int run, NativeProcedure proc, string path)
+    {
+        if (_refsFor == proc.Address && _nativeRefs is not null) return;
+        var cache = _refsCache;
+        if (!cache.TryGetValue(proc.Address, out var task))
+        {
+            var ct = _targetCts?.Token ?? CancellationToken.None;
+            task = Task.Run(() => Backend.NativeRefsAsync(path, proc.Address, ct), ct);
+            cache[proc.Address] = task;
+        }
+        try
+        {
+            var refs = await task.ConfigureAwait(true);
+            if (run != _codeRun) return;
+            ShowRefs(proc.Address, refs, null);
+        }
+        catch (Exception ex)
+        {
+            // a failed lookup is not kept: picking the function again asks once more
+            if (cache.TryGetValue(proc.Address, out var t) && t == task) cache.Remove(proc.Address);
+            if (ex is OperationCanceledException) return;
+            AppPaths.Log("Native refs failed: " + path + " " + proc.Address, ex);
+            if (run != _codeRun) return;
+            ShowRefs(proc.Address, null, "Nat.Refs.Err");
+        }
+    }
+
+    private void ShowRefs(string? address, NativeRefs? refs, string? noteKey, bool busy = false)
+    {
+        _refsFor = address;
+        _nativeRefs = refs;
+        _refsNoteKey = noteKey;
+        RefsBusy = busy;
+        RebuildSelection();
+        Raise(nameof(NoRefsText));
+    }
+
+    private void OpenRef(RefRow? row)
+    {
+        if (row?.Target is not { } target || !_byAddress.TryGetValue(target.Key, out var item)) return;
+        if (!_view.Contains(item)) Search = "";  // the filter hides it: show the whole list again
+        Tab = BinTab.Code;
+        Selected = item;
     }
 
     private static string CodeErrorKey(Exception ex) => ex switch

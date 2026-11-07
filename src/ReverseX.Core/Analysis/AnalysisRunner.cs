@@ -271,6 +271,21 @@ public sealed class AnalysisRunner
         return ReaResultParser.ParseCodeText(text);
     }
 
+    /// <summary>
+    /// Who calls one function and what it calls (procedure_callers, then procedure_callees). Ghidra answers both from its finished
+    /// analysis without decompiling, so they are quick once the function's code has loaded. Errors map as in NativeCodeAsync.
+    /// </summary>
+    public async Task<NativeRefs> NativeRefsAsync(string procedure, CancellationToken ct)
+    {
+        var callersText = await CallTextAsync("procedure_callers", new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var calleesText = await CallTextAsync("procedure_callees", new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        var callers = ReaResultParser.ParseAddressList(callersText);
+        var callees = ReaResultParser.ParseAddressList(calleesText);
+        var limits = callers.Limitations.Concat(callees.Limitations).Distinct(StringComparer.Ordinal).ToList();
+        return new NativeRefs(callers.Addresses, callees.Addresses, limits, callers.Provider.Length > 0 ? callers.Provider : callees.Provider);
+    }
+
     // ───────────── Android → Java (JADX) ─────────────
 
     /// <summary>The first JADX call on an APK loads it (a few seconds on a small app, longer on a big one); later calls are quick.</summary>

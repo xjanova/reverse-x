@@ -153,6 +153,12 @@ public enum NativeCodeView { PseudoCode, Assembly }
 /// <param name="Provider">e.g. "Ghidra 12.1.4".</param>
 public sealed record NativeCode(string? Text, IReadOnlyList<string> Limitations, string Provider);
 
+/// <summary>
+/// Cross-references of one native function as the engine resolved them: entry addresses of the functions that call it and of the
+/// functions it calls (imports keep their EXTERNAL: address). Indirect calls the engine could not resolve are not listed.
+/// </summary>
+public sealed record NativeRefs(IReadOnlyList<string> Callers, IReadOnlyList<string> Callees, IReadOnlyList<string> Limitations, string Provider);
+
 /// <param name="OverloadIndex">JADX's position among same-named methods; stable only within one REA session on one APK.</param>
 public sealed record AndroidMethodRef(string Name, string Signature, int OverloadIndex, bool IsConstructor);
 

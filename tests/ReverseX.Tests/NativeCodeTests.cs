@@ -111,6 +111,75 @@ public sealed class NativeCodeTests
         Assert.Equal(AnalysisFailureKind.NotSupported, ex.Kind);
     }
 
+    // ───────────── refs: procedure_callers / procedure_callees ─────────────
+
+    [Fact]
+    public void ParseAddressList_RealCallers()
+    {
+        var (addresses, limits, provider) = ReaResultParser.ParseAddressList(Fx("native-callers-ghidra.json"));
+        Assert.Equal(new[] { "0x140001300" }, addresses);
+        Assert.Equal("Ghidra 12.1.4", provider);
+        Assert.Contains(limits, l => l.Contains("unresolved computed or indirect calls", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ParseAddressList_RealCallees_KeepsImportsInEngineOrder()
+    {
+        var (addresses, _, _) = ReaResultParser.ParseAddressList(Fx("native-callees-ghidra.json"));
+        Assert.Equal(8, addresses.Count);
+        Assert.Equal(new[] { "EXTERNAL:0x14", "EXTERNAL:0x16", "EXTERNAL:0x4b" }, addresses.Take(3));
+        Assert.Equal("0x140009010", addresses[^1]);
+    }
+
+    [Fact]
+    public void ParseAddressList_RealNoCallers_IsEmpty()
+    {
+        var (addresses, _, provider) = ReaResultParser.ParseAddressList(Fx("native-callers-none.json"));
+        Assert.Empty(addresses);
+        Assert.Equal("Ghidra 12.1.4", provider);
+    }
+
+    [Theory]
+    [InlineData("{\"raw_result\":[\"0x1\",\"0x2\",\"0x1\"]}", 2)]  // no normalized_result: the raw list, each address once
+    [InlineData("{\"raw_result\":{\"value\":[\"0x1\"],\"limitations\":[]}}", 1)]
+    [InlineData("{\"normalized_result\":[1,null,\"\",\"0x5\"]}", 1)]
+    [InlineData("{\"normalized_result\":null}", 0)]
+    [InlineData("{}", 0)]
+    [InlineData("not json", 0)]
+    public void ParseAddressList_OddShapes_NeverThrow(string json, int count)
+    {
+        Assert.Equal(count, ReaResultParser.ParseAddressList(json).Addresses.Count);
+    }
+
+    [Fact]
+    public async Task Runner_NativeRefs_AsksCallersThenCallees()
+    {
+        var rea = new FakeSession
+        {
+            Handler = (tool, _, _) => Task.FromResult(tool switch
+            {
+                "procedure_callers" => Ok(Fx("native-callers-ghidra.json")),
+                "procedure_callees" => Ok(Fx("native-callees-ghidra.json")),
+                _ => Err("{}"),
+            }),
+        };
+        var refs = await new AnalysisRunner(rea).NativeRefsAsync("0x140001140", CancellationToken.None);
+        Assert.Equal(new[] { "procedure_callers {\"procedure\":\"0x140001140\"}", "procedure_callees {\"procedure\":\"0x140001140\"}" }, rea.Calls);
+        Assert.Equal(new[] { "0x140001300" }, refs.Callers);
+        Assert.Equal(8, refs.Callees.Count);
+        Assert.Equal("Ghidra 12.1.4", refs.Provider);
+        Assert.Single(refs.Limitations, l => l.Contains("indirect calls", StringComparison.Ordinal));  // both answers carry it; listed once
+    }
+
+    [Fact]
+    public async Task Runner_NativeRefs_NoFunctionThere_IsInputRejected()
+    {
+        var rea = new FakeSession { Handler = (_, _, _) => Task.FromResult(Err(Fx("native-bad-address.json"))) };
+        var ex = await Assert.ThrowsAsync<AnalysisFailure>(() => new AnalysisRunner(rea).NativeRefsAsync("0x1", CancellationToken.None));
+        Assert.Equal(AnalysisFailureKind.InputRejected, ex.Kind);
+        Assert.Single(rea.Calls);  // callees is not asked after callers failed
+    }
+
     // ───────────── kept-alive session ─────────────
 
     private sealed class Harness : IDisposable
