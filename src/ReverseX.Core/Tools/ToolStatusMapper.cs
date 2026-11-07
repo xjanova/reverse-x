@@ -1,3 +1,4 @@
+using ReverseX.Core.Engines;
 using ReverseX.Core.Rea;
 
 namespace ReverseX.Core.Tools;
@@ -50,16 +51,26 @@ public static class ToolStatusMapper
         var ghidra = Candidate(i, "ghidra");
         if (ghidra is { Status: var s } && IsAvailable(s)) return new("ghidra", "Ghidra", ToolLevel.Ok, "ghidra.ok");
         if (i.JavaMajor is null) return new("ghidra", "Ghidra", ToolLevel.Warn, "ghidra.noJava");
-        if (i.JavaMajor < 21) return new("ghidra", "Ghidra", ToolLevel.Warn, "ghidra.needJdk21", i.JavaMajor.Value.ToString());
-        return i.Providers is null
-            ? new("ghidra", "Ghidra", ToolLevel.Off, "ghidra.unknown")
+        if (i.JavaMajor < EngineCatalog.GhidraMinJavaMajor)
+            return new("ghidra", "Ghidra", ToolLevel.Warn, "ghidra.needJdk21", i.JavaMajor.Value.ToString());
+        if (i.Providers is null) return new("ghidra", "Ghidra", ToolLevel.Off, "ghidra.unknown");
+        // A 12.1.x folder and JDK 21 were handed to REA but REA still refused it (details go to the log).
+        return i.Engines?.GhidraDir is not null
+            ? new("ghidra", "Ghidra", ToolLevel.Warn, "ghidra.rejected")
             : new("ghidra", "Ghidra", ToolLevel.Warn, "ghidra.notSet");
     }
 
-    private static ToolStatus MapJadx(ToolProbeInputs i) =>
-        i.JadxFound
+    private static ToolStatus MapJadx(ToolProbeInputs i)
+    {
+        // REA's Android decompiler is the jadx-headless-mcp JAR (REA_JADX_MCP_JAR) run on a JDK 17+.
+        if (i.Engines?.JadxMcpJar is not null)
+            return i.JavaMajor >= EngineCatalog.JadxMinJavaMajor
+                ? new("jadx", "JADX", ToolLevel.Ok, "jadx.ok")
+                : new("jadx", "JADX", ToolLevel.Warn, "jadx.noJdk");
+        return i.JadxFound
             ? new("jadx", "JADX", ToolLevel.Ok, "jadx.ok")
             : new("jadx", "JADX", ToolLevel.Bad, "jadx.missing");
+    }
 
     private static ToolStatus MapBrowser(ToolProbeInputs i) =>
         i.BrowserName is null
