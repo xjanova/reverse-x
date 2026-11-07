@@ -85,6 +85,8 @@ public sealed record DotNetModel
     public int MemberRefCount { get; init; }
     public string? MembersCoverage { get; init; }
     public List<string> MembersLimitations { get; init; } = new();
+    /// <summary>The list was read from metadata in-process because REA could not list the members (no CIL anchors then).</summary>
+    public bool BuiltLocally { get; init; }
     public int MethodCount => Types.Sum(t => t.Methods.Count);
 }
 

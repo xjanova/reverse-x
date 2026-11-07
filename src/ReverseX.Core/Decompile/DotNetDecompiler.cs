@@ -161,12 +161,13 @@ public sealed class DotNetDecompiler
             throw new DecompileFailure(DecompileFailureKind.Io, dir + ": " + ex.Message, ex);
         }
 
-        var project = new WholeProjectDecompiler(_settings, _resolver, null, null, null);
+        // Its own decompiler instances and a settings copy: the per-member view (and _gate) stays usable while this runs.
+        var project = new WholeProjectDecompiler(_settings.Clone(), _resolver, null, null, null);
         if (progress is not null)
             project.ProgressIndicator = new Progress<DecompilationProgress>(p => progress.Report((p.UnitsCompleted, p.TotalUnits)));
         try
         {
-            lock (_gate) project.DecompileProject(_file, dir, ct);
+            project.DecompileProject(_file, dir, ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

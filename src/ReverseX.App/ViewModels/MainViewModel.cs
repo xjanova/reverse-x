@@ -20,6 +20,7 @@ public sealed class MainViewModel : ObservableObject
     {
         License = license ?? new LicenseViewModel(FixedLicenseSource.Pro(), new FixedUpdateSource(new ReverseX.Licensing.UpdateStatus { Current = AppVersion.Current }));
         backend ??= new ReaAnalysisBackend();
+        Backend = backend;
         ai ??= new AiServices();
         snapshots ??= new SnapshotStore();
         Nav = new[]
@@ -78,6 +79,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public NavItemViewModel[] Nav { get; }
+    /// <summary>Owns the REA processes kept alive for the file on screen; ended by <see cref="ShutdownAsync"/>.</summary>
+    public IAnalysisBackend Backend { get; }
     public HomeViewModel Home { get; }
     public BinaryViewModel Binary { get; }
     public JsViewModel Js { get; }
@@ -89,6 +92,12 @@ public sealed class MainViewModel : ObservableObject
     public AiViewModel Ai { get; }
     public SettingsViewModel Settings { get; }
     public LicenseViewModel License { get; }
+
+    /// <summary>App is closing: end the kept REA/Ghidra processes instead of leaving them to notice the closed pipe.</summary>
+    public async Task ShutdownAsync()
+    {
+        if (Backend is IAsyncDisposable live) await live.DisposeAsync().ConfigureAwait(false);
+    }
 
     /// <summary>Opens a path from a page's own picker: detects the kind, records it in recent projects, then shows the matching page.</summary>
     private async Task OpenPathAsync(string path)

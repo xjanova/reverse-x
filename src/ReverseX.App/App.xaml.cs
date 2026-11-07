@@ -41,6 +41,10 @@ public partial class App : Application
     {
         _license?.Dispose();
         _updates?.Dispose();
+        // REA (and Ghidra under it) is kept alive for the open file; end it now. Core awaits with ConfigureAwait(false), so
+        // waiting here cannot deadlock on the UI thread; the bound keeps a stuck process from holding the exit.
+        try { _vm?.ShutdownAsync().Wait(TimeSpan.FromSeconds(5)); }
+        catch (AggregateException ex) { AppPaths.Log("Shutdown of REA sessions failed", ex); }
         base.OnExit(e);
     }
 
@@ -53,6 +57,7 @@ public partial class App : Application
 
     private LicenseService? _license;
     private UpdateService? _updates;
+    private MainViewModel? _vm;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -114,7 +119,7 @@ public partial class App : Application
         var license = new LicenseViewModel(_license, _updates);
         license.ExitRequested += Shutdown;
 
-        var vm = new MainViewModel(new ProjectStore(), license: license);
+        var vm = _vm = new MainViewModel(new ProjectStore(), license: license);
         new MainWindow(vm).Show();
         _license.Start();
         _updates.Start();

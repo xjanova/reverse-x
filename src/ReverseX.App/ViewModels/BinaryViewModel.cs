@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Text.Json;
+using System.IO;
 using System.Windows.Input;
 using ReverseX.App.Services;
+using ReverseX.Core;
 using ReverseX.Core.Analysis;
+using ReverseX.Core.Decompile;
 using ReverseX.Core.Files;
 
 namespace ReverseX.App.ViewModels;
@@ -14,9 +16,9 @@ public sealed record CilRow(string Offset, string Opcode, string Operand, string
 public sealed record RefRow(string Text, string Kind);
 public sealed record EvidenceRow(EvidenceLevel Level, string Badge, string Text);
 
-public enum BinTab { Cil, Meta, Go, Native }
+public enum BinTab { Code, Cil, Meta, Go, Native }
 
-/// <summary>The binary page: .NET assemblies (real today), native files (engine needed), Go build info.</summary>
+/// <summary>The binary page: .NET assemblies decompiled to C#, native files as pseudo-C / assembly (engine needed), Go build info.</summary>
 public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 {
     public const string GuideUrl = "https://github.com/morluto/rea#readme";
@@ -28,13 +30,28 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private IReadOnlyList<SymbolItem> _view = Array.Empty<SymbolItem>();
     private SymbolItem? _selected;
     private string _search = "";
-    private BinTab _tab = BinTab.Cil;
+    private BinTab _tab = BinTab.Code;
     private DotNetModel? _dotnet;
     private NativeModel? _native;
     private GoBuildInfoModel? _go;
-    private string _dossier = "";
-    private bool _dossierBusy;
-    private CancellationTokenSource? _dossierCts;
+
+    // code pane
+    private string _codeText = "";
+    private string _codeNote = "";
+    private bool _codeBusy;
+    private bool _wholeType;
+    private NativeCodeView _nativeView = NativeCodeView.PseudoCode;
+    private int _codeRun;
+    private NativeCode? _nativeCode;
+    private CancellationTokenSource? _dotnetCts;
+    private CancellationTokenSource? _targetCts = new();
+    private Task<DotNetDecompiler>? _decompiler;
+    private string? _decompilerPath;
+
+    // export
+    private bool _exportBusy;
+    private string _exportText = "";
+    private CancellationTokenSource? _exportCts;
 
     public BinaryViewModel(IAnalysisBackend backend, SnapshotStore snapshots, Func<string, Task>? openPath)
         : base(backend, snapshots, openPath)
@@ -50,7 +67,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             try { Process.Start(new ProcessStartInfo(GuideUrl) { UseShellExecute = true }); }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         });
-        LoadGraphCommand = new RelayCommand(() => { _ = LoadDossierAsync(graph: true); }, () => _selected?.Proc is not null && !_dossierBusy);
+        CopyCodeCommand = new RelayCommand(CopyCode, () => _codeText.Length > 0);
+        ExportCommand = new RelayCommand(() => { _ = ExportAsync(); }, () => IsDotNet && IsReady && !_exportBusy);
+        CancelExportCommand = new RelayCommand(() => _exportCts?.Cancel(), () => _exportBusy);
     }
 
     protected override string TitleKey => "Bin.Title";
@@ -63,7 +82,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     public ICommand PickCommand { get; }
     public ICommand OpenGuideCommand { get; }
-    public ICommand LoadGraphCommand { get; }
+    public ICommand CopyCodeCommand { get; }
+    public ICommand ExportCommand { get; }
+    public ICommand CancelExportCommand { get; }
 
     // ───────── state shown by the page ─────────
 
@@ -76,8 +97,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     public bool HasSymbols => _all.Count > 0;
     public bool ShowSymbolPanes => IsReady && (IsDotNet || (IsNative && !ShowNoEngine));
     public bool ShowCenterPlain => IsReady && !ShowSymbolPanes;
-    public bool ShowFirstTab => ShowSymbolPanes;
-    public string FirstTabLabel => Loc.Get(IsNative ? "Nat.Dossier" : "Bin.Tab.Cil");
+    public string CodeTabLabel => Loc.Get(IsNative ? "Nat.Tab.Code" : "Bin.Tab.CSharp");
 
     public string Subtitle
     {
@@ -122,7 +142,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         {
             if (!Set(ref _selected, value)) return;
             RebuildSelection();
-            if (IsNative && value?.Proc is not null) _ = LoadDossierAsync(graph: false);
+            _ = LoadCodeAsync();
             CommandManager.InvalidateRequerySuggested();
         }
     }
@@ -133,21 +153,57 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         set
         {
             if (!Set(ref _tab, value)) return;
-            Raise(nameof(TabCil)); Raise(nameof(TabMeta)); Raise(nameof(TabGo)); Raise(nameof(TabNative));
-            Raise(nameof(ShowCil)); Raise(nameof(ShowMeta)); Raise(nameof(ShowGo)); Raise(nameof(ShowNativeInfo));
+            Raise(nameof(TabCode)); Raise(nameof(TabCil)); Raise(nameof(TabMeta)); Raise(nameof(TabGo)); Raise(nameof(TabNative));
+            Raise(nameof(ShowCode)); Raise(nameof(ShowCil)); Raise(nameof(ShowMeta)); Raise(nameof(ShowGo)); Raise(nameof(ShowNativeInfo));
+            Raise(nameof(ShowSelectionHeader));
         }
     }
 
+    public bool TabCode { get => _tab == BinTab.Code; set { if (value) Tab = BinTab.Code; } }
     public bool TabCil { get => _tab == BinTab.Cil; set { if (value) Tab = BinTab.Cil; } }
     public bool TabMeta { get => _tab == BinTab.Meta; set { if (value) Tab = BinTab.Meta; } }
     public bool TabGo { get => _tab == BinTab.Go; set { if (value) Tab = BinTab.Go; } }
     public bool TabNative { get => _tab == BinTab.Native; set { if (value) Tab = BinTab.Native; } }
+    public bool ShowCode => _tab == BinTab.Code;
     public bool ShowCil => _tab == BinTab.Cil;
     public bool ShowMeta => _tab == BinTab.Meta;
     public bool ShowGo => _tab == BinTab.Go;
     public bool ShowNativeInfo => _tab == BinTab.Native;
+    public bool ShowSelectionHeader => _tab is BinTab.Code or BinTab.Cil;
 
-    // ───────── center ─────────
+    // ───────── center: code ─────────
+
+    public string CodeText { get => _codeText; private set { if (Set(ref _codeText, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public string CodeNote { get => _codeNote; private set => Set(ref _codeNote, value); }
+    public bool CodeBusy { get => _codeBusy; private set => Set(ref _codeBusy, value); }
+
+    /// <summary>.NET: show the whole declaring class instead of the one method.</summary>
+    public bool ScopeType
+    {
+        get => _wholeType;
+        set { if (Set(ref _wholeType, value)) { Raise(nameof(ScopeMethod)); _ = LoadCodeAsync(); } }
+    }
+    public bool ScopeMethod { get => !_wholeType; set => ScopeType = !value; }
+
+    public bool ViewAsm
+    {
+        get => _nativeView == NativeCodeView.Assembly;
+        set
+        {
+            var v = value ? NativeCodeView.Assembly : NativeCodeView.PseudoCode;
+            if (v == _nativeView) return;
+            _nativeView = v;
+            Raise(nameof(ViewAsm)); Raise(nameof(ViewPseudo));
+            _ = LoadCodeAsync();
+        }
+    }
+    public bool ViewPseudo { get => !ViewAsm; set => ViewAsm = !value; }
+
+    public bool ExportBusy { get => _exportBusy; private set { if (Set(ref _exportBusy, value)) CommandManager.InvalidateRequerySuggested(); } }
+    public string ExportText { get => _exportText; private set { if (Set(ref _exportText, value)) Raise(nameof(HasExportText)); } }
+    public bool HasExportText => _exportText.Length > 0;
+
+    // ───────── center: CIL / metadata / native / Go ─────────
 
     public IReadOnlyList<CilRow> CilRows { get; private set; } = Array.Empty<CilRow>();
     public string CilHeader { get; private set; } = "";
@@ -160,8 +216,6 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     public IReadOnlyList<MetaRow> GoDeps { get; private set; } = Array.Empty<MetaRow>();
     public IReadOnlyList<MetaRow> GoSettings { get; private set; } = Array.Empty<MetaRow>();
     public string GoDepsTitle { get; private set; } = "";
-    public string DossierText { get => _dossier; private set => Set(ref _dossier, value); }
-    public bool DossierBusy { get => _dossierBusy; private set => Set(ref _dossierBusy, value); }
 
     // ───────── right ─────────
 
@@ -177,9 +231,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     {
         _dotnet = null; _native = null; _go = null;
         _all = Array.Empty<SymbolItem>();
+        _view = Array.Empty<SymbolItem>();
         _selected = null;
-        _dossierCts?.Cancel();
-        DossierText = "";
+        ResetCode();
         RaiseAll();
     }
 
@@ -189,40 +243,72 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         _native = snap.Native;
         _go = snap.Go;
         _selected = null;
-        DossierText = "";
+        ResetCode();
 
         if (_dotnet is not null)
         {
             _all = _dotnet.Types
                 .SelectMany(t => t.Methods.Select(m => new SymbolItem(m.Name, t.FullName, m.Token, m, null)))
                 .ToList();
-            _tab = BinTab.Cil;
+            _tab = BinTab.Code;
         }
         else if (_native is not null)
         {
-            _all = _native.Procedures.Take(MaxListRows).Select(p => new SymbolItem(p.Name, p.Address, p.Address, null, p)).ToList();
-            _tab = ShowNoEngine || _all.Count == 0 ? BinTab.Native : BinTab.Cil;
+            // the binary's own functions first; imports (no code in this file) at the end
+            _all = _native.Procedures
+                .OrderBy(p => p.External)
+                .Take(MaxListRows)
+                .Select(p => new SymbolItem(p.Name, SubFor(p), p.Address, null, p))
+                .ToList();
+            _tab = ShowNoEngine || _all.Count == 0 ? BinTab.Native : BinTab.Code;
         }
         _search = "";
         _view = Filter(_all, "");
         BuildStatic();
-        // first method that actually has IL, so the page opens on something readable
-        _selected = _dotnet is null ? null : _view.FirstOrDefault(i => i.Method is { HasBody: true, Anchors.Count: > 0 });
+        _selected = PickFirst();
         RebuildSelection();
         RaiseAll();
+        _ = LoadCodeAsync();
     }
+
+    /// <summary>
+    /// What the page opens on. .NET: the first method with IL. Native: the entry point — but only right after a live analysis,
+    /// when Ghidra's session is warm; from a saved snapshot the first code request costs a full re-analysis, so the user picks.
+    /// </summary>
+    private SymbolItem? PickFirst()
+    {
+        if (_dotnet is not null)
+            return _view.FirstOrDefault(i => i.Method is { HasBody: true, Anchors.Count: > 0 })
+                ?? _view.FirstOrDefault(i => i.Method is { HasBody: true });  // a locally built list has no anchors
+        if (_native is not null && !FromSnapshot)
+            return _view.FirstOrDefault(i => i.Proc is { External: false } p && p.Name == "entry")
+                ?? _view.FirstOrDefault(i => i.Proc is { External: false, Thunk: false });
+        return null;
+    }
+
+    private string SubFor(NativeProcedure p) =>
+        p.External ? Loc.Get("Nat.Import") : p.Thunk ? p.Address + " · " + Loc.Get("Nat.Thunk") : p.Address;
 
     protected override void OnStateChanged()
     {
         Raise(nameof(ShowEmpty)); Raise(nameof(ShowSymbolPanes)); Raise(nameof(ShowCenterPlain));
+        CommandManager.InvalidateRequerySuggested();
     }
 
     protected override void OnLanguageChanged()
     {
         if (Snapshot is null) return;
         BuildStatic();
+        if (_native is not null)
+        {
+            var sel = _selected?.Key;
+            _all = _all.Select(i => i.Proc is { } p ? i with { Sub = SubFor(p) } : i).ToList();
+            _view = Filter(_all, _search);
+            _selected = sel is null ? null : _view.FirstOrDefault(i => i.Key == sel);
+        }
         RebuildSelection();
         RaiseAll();
+        _ = LoadCodeAsync();
     }
 
     // ───────── builders ─────────
@@ -311,7 +397,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         var refs = new List<RefRow>();
         var ev = new List<EvidenceRow>();
         CilHeader = "";
-        CilNote = Loc.Get("Bin.CilNote");
+        CilNote = Loc.Get(_dotnet is { BuiltLocally: true } ? "Bin.CilLocal" : "Bin.CilNote");
 
         var conf = EvidenceLevels.FromRea(_dotnet?.Info.Confidence);
         EvidenceRow Row(EvidenceLevel lv, string text) =>
@@ -342,11 +428,19 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
             {
                 ev.Add(Row(conf, Loc.Format("Bin.Sum.Asm", d.Info.Name, d.Types.Count, d.MethodCount, d.Info.References.Count)));
             }
-            if (d.Info.CoverageState is { Length: > 0 } cs && cs != "complete")
+            if (d.BuiltLocally)
+                ev.Add(Row(EvidenceLevel.Unknown, Loc.Get("Bin.Sum.Local")));
+            else if (d.Info.CoverageState is { Length: > 0 } cs && cs != "complete")
                 ev.Add(Row(EvidenceLevel.Unknown, Loc.Format("Bin.Sum.Partial", cs)));
             if (conf == EvidenceLevel.Inferred)
                 ev.Add(Row(EvidenceLevel.Inferred, Loc.Format("Bin.Sum.Derived", d.Info.Confidence)));
             foreach (var l in Limitations.Take(2)) ev.Add(Row(EvidenceLevel.Unknown, l));
+        }
+        else if (_native is not null && _selected?.Proc is { } p && _nativeCode is { } code)
+        {
+            // What the engine itself says about the text on screen: it is the engine's reconstruction, with its own caveats.
+            ev.Add(Row(EvidenceLevel.Inferred, Loc.Format(_nativeView == NativeCodeView.Assembly ? "Nat.Sum.Asm" : "Nat.Sum.Pseudo", p.Name, code.Provider)));
+            foreach (var l in code.Limitations.Take(3)) ev.Add(Row(EvidenceLevel.Unknown, l));
         }
 
         CilRows = cil;
@@ -362,10 +456,11 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         foreach (var n in new[]
         {
             nameof(HasTarget), nameof(ShowEmpty), nameof(IsDotNet), nameof(IsNative), nameof(HasGo), nameof(ShowNoEngine),
-            nameof(HasSymbols), nameof(ShowSymbolPanes), nameof(ShowCenterPlain), nameof(ShowFirstTab), nameof(FirstTabLabel), nameof(Subtitle), nameof(Items), nameof(Search),
+            nameof(HasSymbols), nameof(ShowSymbolPanes), nameof(ShowCenterPlain), nameof(CodeTabLabel), nameof(Subtitle), nameof(Items), nameof(Search),
             nameof(AllCountText), nameof(TypeCountText), nameof(HasTypeCount), nameof(ListNote), nameof(SearchHint), nameof(Selected),
-            nameof(Tab), nameof(TabCil), nameof(TabMeta), nameof(TabGo), nameof(TabNative), nameof(ShowCil), nameof(ShowMeta),
-            nameof(ShowGo), nameof(ShowNativeInfo), nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons),
+            nameof(Tab), nameof(TabCode), nameof(TabCil), nameof(TabMeta), nameof(TabGo), nameof(TabNative),
+            nameof(ShowCode), nameof(ShowCil), nameof(ShowMeta), nameof(ShowGo), nameof(ShowNativeInfo), nameof(ShowSelectionHeader),
+            nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons),
             nameof(GoRows), nameof(GoDeps), nameof(GoSettings), nameof(GoDepsTitle), nameof(TargetName),
         }) Raise(n);
     }
@@ -383,48 +478,175 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     private void ApplyFilter() => Items = Filter(_all, _search);
 
-    // ───────── native: dossier / call graph ─────────
+    // ───────── code ─────────
 
-    private async Task LoadDossierAsync(bool graph)
+    /// <summary>New target or new result: stop work for the old one and forget its decompiler.</summary>
+    private void ResetCode()
     {
+        _codeRun++;
+        _targetCts?.Cancel();
+        _targetCts = new CancellationTokenSource();
+        _dotnetCts?.Cancel();
+        _decompiler = null;
+        _decompilerPath = null;
+        _nativeCode = null;
+        CodeText = "";
+        CodeNote = "";
+        CodeBusy = false;
+    }
+
+    private Task<DotNetDecompiler> DecompilerFor(string path)
+    {
+        if (_decompiler is null || !string.Equals(_decompilerPath, path, StringComparison.OrdinalIgnoreCase))
+        {
+            _decompilerPath = path;
+            _decompiler = Task.Run(() => DotNetDecompiler.Open(path));
+        }
+        return _decompiler;
+    }
+
+    private async Task LoadCodeAsync()
+    {
+        var run = ++_codeRun;
         var item = _selected;
         var path = TargetPath;
-        if (item?.Proc is null || path is null) return;
-        _dossierCts?.Cancel();
-        var cts = _dossierCts = new CancellationTokenSource();
-        DossierBusy = true;
-        DossierText = "…";
+        _nativeCode = null;
+        // no IsReady check: ApplySnapshot runs this before the base class flips State to Ready
+        if (item is null || path is null || (_dotnet is null && _native is null))
+        {
+            CodeText = "";
+            CodeNote = HasSymbols ? Loc.Get(IsNative ? "Nat.Pick" : "Code.Pick") : "";
+            CodeBusy = false;
+            return;
+        }
+        if (item.Proc is { External: true })
+        {
+            CodeText = "";
+            CodeNote = Loc.Get("Code.Import");
+            CodeBusy = false;
+            RebuildSelection();
+            return;
+        }
+
+        CodeBusy = true;
+        CodeText = "";
+        CodeNote = Loc.Get(item.Method is not null ? "Code.Loading.Net" : "Code.Loading.Native");
         try
         {
-            var text = await Task.Run(async () => graph
-                ? await Backend.CallGraphAsync(path, item.Proc.Address, cts.Token).ConfigureAwait(false)
-                : (await Backend.NativeCodeAsync(path, item.Proc.Address, NativeCodeView.PseudoCode, cts.Token).ConfigureAwait(false)).Text ?? "").ConfigureAwait(true);
-            if (!ReferenceEquals(_dossierCts, cts)) return;
-            DossierText = Pretty(text);
+            if (item.Method is { } method)
+            {
+                // a new click may cancel the previous decompile: it holds nothing worth keeping
+                _dotnetCts?.Cancel();
+                var cts = _dotnetCts = CancellationTokenSource.CreateLinkedTokenSource(_targetCts?.Token ?? CancellationToken.None);
+                var whole = _wholeType;
+                var dec = await DecompilerFor(path).ConfigureAwait(true);
+                var text = await Task.Run(() => whole ? dec.DecompileDeclaringType(method.Token, cts.Token) : dec.Decompile(method.Token, cts.Token), cts.Token)
+                    .ConfigureAwait(true);
+                if (run != _codeRun) return;
+                CodeText = text;
+                CodeNote = Loc.Get("Code.Source.Net");
+            }
+            else if (item.Proc is { } proc)
+            {
+                // NOT cancelled by the next click: the first request may be the one waiting for Ghidra's whole-file analysis,
+                // and cancelling it would make REA throw that analysis away. A newer click just ignores this result.
+                var view = _nativeView;
+                var ct = _targetCts?.Token ?? CancellationToken.None;
+                var code = await Task.Run(() => Backend.NativeCodeAsync(path, proc.Address, view, ct), ct).ConfigureAwait(true);
+                if (run != _codeRun) return;
+                _nativeCode = code;
+                CodeText = code.Text ?? "";
+                CodeNote = code.Text is { Length: > 0 }
+                    ? Loc.Format(view == NativeCodeView.Assembly ? "Code.Source.Asm" : "Code.Source.Pseudo", code.Provider)
+                    : Loc.Get("Code.Empty");
+                RebuildSelection();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            AppPaths_Log(ex);
-            if (ReferenceEquals(_dossierCts, cts)) DossierText = Loc.Get(ex is AnalysisFailure f && f.Kind == AnalysisFailureKind.NotSupported ? "Err.NotSupported" : "Err.Analysis");
+            AppPaths.Log("Code view failed: " + path + " " + item.Key, ex);
+            if (run != _codeRun) return;
+            CodeText = "";
+            CodeNote = Loc.Get(CodeErrorKey(ex));
         }
         finally
         {
-            if (ReferenceEquals(_dossierCts, cts)) DossierBusy = false;
-            CommandManager.InvalidateRequerySuggested();
+            if (run == _codeRun) CodeBusy = false;
         }
     }
 
-    private static void AppPaths_Log(Exception ex) => ReverseX.Core.AppPaths.Log("Function dossier failed", ex);
-
-    private static string Pretty(string json)
+    private static string CodeErrorKey(Exception ex) => ex switch
     {
+        DecompileFailure { Kind: DecompileFailureKind.NotManaged } => "Code.Err.NotManaged",
+        DecompileFailure { Kind: DecompileFailureKind.BadToken } => "Code.Err.Stale",
+        DecompileFailure => "Code.Err.Failed",
+        IOException or UnauthorizedAccessException => "Code.Err.Read",
+        AnalysisFailure { Kind: AnalysisFailureKind.InputRejected } => "Code.Err.NoFunction",
+        AnalysisFailure { Kind: AnalysisFailureKind.NotSupported } => "Code.Err.NoEngine",
+        AnalysisFailure f when f.Kind != AnalysisFailureKind.Generic => "Err." + f.Kind,
+        _ => "Err.Analysis",
+    };
+
+    private void CopyCode()
+    {
+        if (_codeText.Length == 0) return;
+        try { System.Windows.Clipboard.SetText(_codeText); }
+        catch (System.Runtime.InteropServices.ExternalException ex) { AppPaths.Log("Clipboard busy", ex); }
+    }
+
+    // ───────── export (.NET → C# project) ─────────
+
+    private async Task ExportAsync()
+    {
+        var path = TargetPath;
+        if (path is null || !IsDotNet || _exportBusy) return;
+        var parent = Dialogs.PickFolder(Loc.Get("Dlg.PickExportFolder"));
+        if (parent is null) return;
+
+        // always a folder that did not exist: nothing of the user's is overwritten, and a cancelled export can be removed whole
+        var target = DotNetDecompiler.FreshExportFolder(parent, Path.GetFileName(path));
+        var cts = _exportCts = new CancellationTokenSource();
+        ExportBusy = true;
+        ExportText = Loc.Get("Code.Exporting");
+        var progress = new Progress<(int Done, int Total)>(p =>
+        {
+            if (ReferenceEquals(_exportCts, cts) && p.Total > 0) ExportText = Loc.Format("Code.ExportProgress", p.Done, p.Total);
+        });
         try
         {
-            using var doc = JsonDocument.Parse(json);
-            var s = JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
-            return s.Length > 200_000 ? s[..200_000] + "\n…" : s;
+            var dec = await DecompilerFor(path).ConfigureAwait(true);
+            await Task.Run(() => dec.ExportProject(target, progress, cts.Token), cts.Token).ConfigureAwait(true);
+            ExportText = Loc.Format("Code.Exported", target);
+            try { Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { target }, UseShellExecute = false }); }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
         }
-        catch (JsonException) { return json.Length > 200_000 ? json[..200_000] : json; }
+        catch (OperationCanceledException)
+        {
+            RemovePartial(target);
+            ExportText = Loc.Get("Code.ExportCancelled");
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Export failed: " + path + " → " + target, ex);
+            // An Io failure may be the "folder is not empty" guard (someone created it in between): then it is not ours to
+            // delete, so files already written stay and the message points at the folder.
+            var io = ex is DecompileFailure { Kind: DecompileFailureKind.Io } or IOException or UnauthorizedAccessException;
+            if (!io) RemovePartial(target);
+            ExportText = io ? Loc.Format("Code.ExportIo", target) : Loc.Get("Code.ExportFailed");
+        }
+        finally
+        {
+            if (ReferenceEquals(_exportCts, cts)) _exportCts = null;
+            cts.Dispose();
+            ExportBusy = false;
+        }
+    }
+
+    /// <summary>Only ever called on the folder FreshExportFolder just made for this export.</summary>
+    private static void RemovePartial(string target)
+    {
+        try { if (Directory.Exists(target)) Directory.Delete(target, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { AppPaths.Log("Could not remove partial export " + target, ex); }
     }
 }

@@ -230,6 +230,26 @@ public sealed class AnalysisRunner
         return (new NativeModel { Identity = identity, Procedures = all.Take(ProcedureCap).ToList(), ProcedureTotal = all.Count }, go);
     }
 
+    /// <summary>
+    /// A .NET snapshot built in-process from the assembly's metadata, for when REA cannot list the members (its admission budget,
+    /// no Node, REA down). The C# view works the same; only REA's CIL anchors are missing (DotNet.BuiltLocally says so).
+    /// Throws DecompileFailure(NotManaged) when the file has no CLI metadata at all.
+    /// </summary>
+    public static AnalysisSnapshot LocalDotNetSnapshot(string path, CancellationToken ct)
+    {
+        var (size, write) = SnapshotStore.Stamp(path);
+        return new AnalysisSnapshot
+        {
+            SourcePath = Path.GetFullPath(path),
+            SourceSize = size,
+            SourceWriteUtc = write,
+            CreatedUtc = DateTime.UtcNow,
+            ReaVersion = ReaLauncher.PinnedVersion,
+            Kind = AnalysisKind.DotNet,
+            DotNet = Decompile.ManagedListing.Build(path, ct),
+        };
+    }
+
     /// <summary>Selects the binary in this REA session (needed before function-level calls).</summary>
     public async Task OpenAsync(string path, CancellationToken ct) =>
         await CallTextAsync("open_binary", new JsonObject { ["path"] = Path.GetFullPath(path) }, Long, ct).ConfigureAwait(false);

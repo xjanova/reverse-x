@@ -4,6 +4,7 @@ using System.Windows.Input;
 using ReverseX.App.Services;
 using ReverseX.Core;
 using ReverseX.Core.Analysis;
+using ReverseX.Core.Decompile;
 using ReverseX.Core.Files;
 using ReverseX.Core.Rea;
 
@@ -37,10 +38,25 @@ public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
         if (kind is FileKind.Pe or FileKind.Elf or FileKind.MachO)
             return await OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).AnalyzeAsync(path, kind, progress, c), ct).ConfigureAwait(false);
 
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session, ReaSession.ManagedMembersViaCli(node));
-        return await runner.AnalyzeAsync(path, kind, progress, ct).ConfigureAwait(false);
+        try
+        {
+            var node = await NodeAsync(ct).ConfigureAwait(false);
+            await using var session = new ReaSession(node);
+            var runner = new AnalysisRunner(session, ReaSession.ManagedMembersViaCli(node));
+            return await runner.AnalyzeAsync(path, kind, progress, ct).ConfigureAwait(false);
+        }
+        catch (AnalysisFailure ex) when (kind == FileKind.DotNet)
+        {
+            // REA could not list the members (budget, no Node, REA down): C# does not need REA, so list them from metadata here.
+            AppPaths.Log("REA could not list .NET members, using the local metadata list: " + path, ex);
+            try { return await Task.Run(() => AnalysisRunner.LocalDotNetSnapshot(path, ct), ct).ConfigureAwait(false); }
+            catch (DecompileFailure local)
+            {
+                AppPaths.Log("Local metadata list failed too: " + path, local);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw();
+                throw;
+            }
+        }
     }
 
     public Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct) =>

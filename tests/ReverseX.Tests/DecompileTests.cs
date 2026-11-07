@@ -151,6 +151,57 @@ public sealed class DecompileTests : IDisposable
         Assert.Equal("short", DotNetDecompiler.Cap("short"));
     }
 
+    // ───────────── local member list (when REA cannot list them) ─────────────
+
+    [Fact]
+    public void ManagedListing_ListsMethodsWithTheRealTokensAndSignatures()
+    {
+        var m = ManagedListing.Build(OwnAssembly, CancellationToken.None);
+        Assert.True(m.BuiltLocally);
+        Assert.Equal("ReverseX.Tests", m.Info.Name);
+        Assert.StartsWith(".NETCoreApp,Version=v8.0", m.Info.TargetFramework);
+        Assert.Equal(64, m.Info.Sha256.Length);
+        Assert.Contains(m.Info.References, r => r.Name == "ReverseX.Core");
+
+        var type = m.Types.Single(t => t.FullName == "ReverseX.Tests.DecompileTests");
+        var sample = type.Methods.Single(x => x.Name == nameof(SampleForDecompiler));
+        Assert.Equal(TokenOf(SampleMethod), sample.Token);
+        Assert.Equal("(int) → string", sample.Signature);
+        Assert.True(sample.HasBody);
+        Assert.True(sample.IlSize > 0);
+        Assert.Empty(sample.Anchors);
+
+        // nested types keep the Outer+Inner shape; generic arity stays as metadata writes it
+        Assert.Contains(m.Types, t => t.FullName == "ReverseX.Tests.DecompileTests+SyncProgress`1");
+    }
+
+    [Fact]
+    public void ManagedListing_TokensDecompile()
+    {
+        var m = ManagedListing.Build(OwnAssembly, CancellationToken.None);
+        var token = m.Types.Single(t => t.FullName == "ReverseX.Tests.DecompileTests").Methods.Single(x => x.Name == nameof(SampleForDecompiler)).Token;
+        Assert.Contains("\"rx-sample-\"", DotNetDecompiler.Open(OwnAssembly).Decompile(token, CancellationToken.None));
+    }
+
+    [Fact]
+    public void ManagedListing_NotAnAssembly_IsNotManaged()
+    {
+        var junk = Path.Combine(_dir, "junk2.dll");
+        File.WriteAllBytes(junk, new byte[] { 0x4D, 0x5A, 1, 2, 3 });
+        var ex = Assert.Throws<DecompileFailure>(() => ManagedListing.Build(junk, CancellationToken.None));
+        Assert.Equal(DecompileFailureKind.NotManaged, ex.Kind);
+    }
+
+    [Fact]
+    public void LocalDotNetSnapshot_IsADotNetSnapshotOfThatFile()
+    {
+        var s = ReverseX.Core.Analysis.AnalysisRunner.LocalDotNetSnapshot(OwnAssembly, CancellationToken.None);
+        Assert.Equal(ReverseX.Core.Analysis.AnalysisKind.DotNet, s.Kind);
+        Assert.Equal(Path.GetFullPath(OwnAssembly), s.SourcePath);
+        Assert.Equal(new FileInfo(OwnAssembly).Length, s.SourceSize);
+        Assert.True(s.DotNet is { BuiltLocally: true, MethodCount: > 10 });
+    }
+
     /// <summary>Progress&lt;T&gt; posts to the thread pool; tests need the count when the call returns.</summary>
     private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
     {

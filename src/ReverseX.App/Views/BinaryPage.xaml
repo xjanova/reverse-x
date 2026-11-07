@@ -184,22 +184,76 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <StackPanel Orientation="Horizontal">
-                            <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{Binding FirstTabLabel}" IsChecked="{Binding TabCil, Mode=TwoWay}" Margin="0,0,6,0"/>
-                            <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Meta}" IsChecked="{Binding TabMeta, Mode=TwoWay}" Margin="0,0,6,0"
-                                         Visibility="{Binding IsDotNet, Converter={StaticResource B2V}}"/>
-                            <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Native}" IsChecked="{Binding TabNative, Mode=TwoWay}" Margin="0,0,6,0"
-                                         Visibility="{Binding IsNative, Converter={StaticResource B2V}}"/>
-                            <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Go}" IsChecked="{Binding TabGo, Mode=TwoWay}"
-                                         Visibility="{Binding HasGo, Converter={StaticResource B2V}}"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="1" Margin="2,12,0,8" Visibility="{Binding ShowCil, Converter={StaticResource B2V}}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{Binding CodeTabLabel}" IsChecked="{Binding TabCode, Mode=TwoWay}" Margin="0,0,6,0"/>
+                                <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Cil}" IsChecked="{Binding TabCil, Mode=TwoWay}" Margin="0,0,6,0"
+                                             Visibility="{Binding IsDotNet, Converter={StaticResource B2V}}"/>
+                                <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Meta}" IsChecked="{Binding TabMeta, Mode=TwoWay}" Margin="0,0,6,0"
+                                             Visibility="{Binding IsDotNet, Converter={StaticResource B2V}}"/>
+                                <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Native}" IsChecked="{Binding TabNative, Mode=TwoWay}" Margin="0,0,6,0"
+                                             Visibility="{Binding IsNative, Converter={StaticResource B2V}}"/>
+                                <RadioButton GroupName="bintab" Style="{StaticResource Seg}" Content="{DynamicResource S.Bin.Tab.Go}" IsChecked="{Binding TabGo, Mode=TwoWay}"
+                                             Visibility="{Binding HasGo, Converter={StaticResource B2V}}"/>
+                            </StackPanel>
+                            <!-- ส่งออกทั้ง assembly เป็นโปรเจกต์ C# (เฉพาะ .NET) -->
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Visibility="{Binding IsDotNet, Converter={StaticResource B2V}}">
+                                <Button Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Code.Export.Cancel}" Command="{Binding CancelExportCommand}" Margin="0,0,6,0"
+                                        Visibility="{Binding ExportBusy, Converter={StaticResource B2V}}"/>
+                                <Button Style="{StaticResource Btn.Violet}" Content="{DynamicResource S.Code.Export}" Command="{Binding ExportCommand}"
+                                        ToolTip="{DynamicResource S.Code.Export.Tip}"/>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Margin="2,12,0,8" Visibility="{Binding ShowSelectionHeader, Converter={StaticResource B2V}}">
+                            <TextBlock FontSize="11.5" Foreground="{DynamicResource B.Text2}" TextWrapping="Wrap" Margin="0,0,0,8" Text="{Binding ExportText}"
+                                       Visibility="{Binding HasExportText, Converter={StaticResource B2V}}"/>
                             <TextBlock Style="{StaticResource T.H2}" Text="{Binding SelectedTitle}" TextTrimming="CharacterEllipsis" FontFamily="{StaticResource F.Mono}"/>
                             <TextBlock Style="{StaticResource T.Sub}" Margin="0,2,0,0" Text="{Binding CilHeader}" FontFamily="{StaticResource F.Mono}" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
 
                         <!-- CIL -->
                         <Grid Grid.Row="2" Margin="0,4,0,0">
+                            <!-- โค้ด: C# ที่ถอดกลับ (.NET) / C จำลอง หรือแอสเซมบลี (native) -->
+                            <Grid Visibility="{Binding ShowCode, Converter={StaticResource B2V}}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Visibility="{Binding IsDotNet, Converter={StaticResource B2V}}">
+                                            <RadioButton GroupName="codescope" Style="{StaticResource Seg}" Content="{DynamicResource S.Code.Scope.Method}" IsChecked="{Binding ScopeMethod, Mode=TwoWay}" Margin="0,0,6,0"/>
+                                            <RadioButton GroupName="codescope" Style="{StaticResource Seg}" Content="{DynamicResource S.Code.Scope.Type}" IsChecked="{Binding ScopeType, Mode=TwoWay}" Margin="0,0,10,0"/>
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" Visibility="{Binding IsNative, Converter={StaticResource B2V}}">
+                                            <RadioButton GroupName="codeview" Style="{StaticResource Seg}" Content="{DynamicResource S.Code.View.Pseudo}" IsChecked="{Binding ViewPseudo, Mode=TwoWay}" Margin="0,0,6,0"/>
+                                            <RadioButton GroupName="codeview" Style="{StaticResource Seg}" Content="{DynamicResource S.Code.View.Asm}" IsChecked="{Binding ViewAsm, Mode=TwoWay}" Margin="0,0,10,0"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <ProgressBar Width="70" Height="6" IsIndeterminate="True" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                     Visibility="{Binding CodeBusy, Converter={StaticResource B2V}}"/>
+                                        <TextBlock FontSize="11.5" Foreground="{DynamicResource B.Text3}" TextWrapping="Wrap" VerticalAlignment="Center" Text="{Binding CodeNote}"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Code.Copy}" Command="{Binding CopyCodeCommand}" Margin="8,0,0,0"/>
+                                </Grid>
+                                <Border Grid.Row="1" CornerRadius="12" Background="{DynamicResource B.Input}" BorderBrush="{DynamicResource B.InputLine}" BorderThickness="1" Padding="4">
+                                    <TextBox Text="{Binding CodeText, Mode=OneWay}" IsReadOnly="True" IsUndoEnabled="False" AcceptsReturn="True" AcceptsTab="True"
+                                             TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                             FontFamily="{StaticResource F.Mono}" FontSize="12.5" Foreground="{DynamicResource B.Text}"
+                                             Background="Transparent" BorderThickness="0" Padding="8,6" CaretBrush="{DynamicResource B.Cyan}"/>
+                                </Border>
+                            </Grid>
+
                             <Grid Visibility="{Binding ShowCil, Converter={StaticResource B2V}}">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>

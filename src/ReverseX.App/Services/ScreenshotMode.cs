@@ -143,27 +143,45 @@ internal static class ScreenshotMode
         vm.Select("Binary"); await Flush(); Shoot("binary", "-empty");
         vm.Select("Js"); await Flush(); Shoot("js", "-empty");
 
-        if (files.Length > 0)
+        // the code pane loads after the page is Ready (C# decompile, or Ghidra's first whole-file analysis for native)
+        async Task WaitCode(TimeSpan max)
+        {
+            await Flush();
+            var until = DateTime.UtcNow + max;
+            while (vm.Binary.CodeBusy && DateTime.UtcNow < until) await Task.Delay(300);
+            await Flush();
+        }
+
+        if (files.Length > 0 && files[0] != "-")
         {
             await vm.OpenEntryAsync(files[0], FileKindDetector.Detect(files[0]).Kind);
             await WaitReady(vm.Binary);
-            await Flush(); Shoot("binary-dotnet");
+            await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-dotnet");
+            vm.Binary.ScopeType = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-dotnet", "-class");
+            vm.Binary.ScopeType = false;
+            vm.Binary.Tab = BinTab.Cil; await Flush(); Shoot("binary-dotnet", "-cil");
             vm.Binary.Tab = BinTab.Meta; await Flush(); Shoot("binary-dotnet", "-meta");
-            vm.Binary.Tab = BinTab.Cil;
+            vm.Binary.Tab = BinTab.Code;
         }
-        if (files.Length > 1)
+        if (files.Length > 1 && files[1] != "-")
         {
             await vm.OpenEntryAsync(files[1], FileKindDetector.Detect(files[1]).Kind);
             await WaitReady(vm.Js);
             await Flush(); Shoot("js");
         }
-        if (files.Length > 2)
+        if (files.Length > 2 && files[2] != "-")
         {
             await vm.OpenEntryAsync(files[2], FileKindDetector.Detect(files[2]).Kind);
             await WaitReady(vm.Binary);
-            await Flush(); Shoot("binary-native");
+            await WaitCode(TimeSpan.FromMinutes(10)); Shoot("binary-native");
+            if (vm.Binary.ShowSymbolPanes)
+            {
+                vm.Binary.ViewAsm = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-asm");
+                vm.Binary.ViewAsm = false;
+            }
         }
         win.Close();
+        await vm.ShutdownAsync();
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 
