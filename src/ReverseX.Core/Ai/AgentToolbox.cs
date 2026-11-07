@@ -172,7 +172,7 @@ public sealed class AgentToolbox
         {
             case RecordFinding: return Record(obj);
             case GetResultPage:
-                return new ToolOutput(ResultShrinker.Page(_store, Str(obj, "result_id") ?? "", obj["page"]?.GetValue<int>() ?? 1), false);
+                return new ToolOutput(ResultShrinker.Page(_store, Str(obj, "result_id") ?? "", Int(obj, "page") ?? 1), false);
             case ListProjectFiles when _ownRoot is not null:
                 return new ToolOutput(string.Join('\n', CodeChange.ListFiles(_ownRoot)), false);
             case ReadProjectFile when _ownRoot is not null: return ReadOwn(obj);
@@ -279,7 +279,7 @@ public sealed class AgentToolbox
         var kind = Str(o, "kind");
         var text = Str(o, "text");
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutput("text is required", true);
-        var steps = (o["steps"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList() ?? new List<string>();
+        var steps = (o["steps"] as JsonArray)?.OfType<JsonValue>().Select(x => x.TryGetValue<string>(out var s) ? s : "").Where(x => x.Length > 0).ToList() ?? new List<string>();
         Finding f;
         switch (kind)
         {
@@ -313,4 +313,13 @@ public sealed class AgentToolbox
     }
 
     private static string? Str(JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    /// <summary>Models send numbers as 2, 2.0 or "2"; GetValue&lt;int&gt; would throw on the last two.</summary>
+    private static int? Int(JsonObject o, string key)
+    {
+        if (o[key] is not JsonValue v) return null;
+        if (v.TryGetValue<int>(out var i)) return i;
+        if (v.TryGetValue<double>(out var d) && d is >= int.MinValue and <= int.MaxValue) return (int)d;
+        return v.TryGetValue<string>(out var s) && int.TryParse(s.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : null;
+    }
 }

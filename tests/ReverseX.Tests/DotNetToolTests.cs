@@ -211,6 +211,27 @@ public sealed class DotNetToolTests : IDisposable
         Assert.Contains("[หน้า 2/", page2.Text);
     }
 
+    [Theory]
+    [InlineData("{\"result_id\":\"r1\",\"page\":\"2\"}")]
+    [InlineData("{\"result_id\":\"r1\",\"page\":2.0}")]
+    public async Task ResultPage_AcceptsPageAsTextOrDecimal(string args)
+    {
+        var box = Box(Core, CoreCode);
+        await box.ExecuteAsync(AgentToolbox.ListDotNetMembers, "{}", default);
+        var r = await box.ExecuteAsync(AgentToolbox.GetResultPage, args, default);
+        Assert.False(r.IsError, r.Text);
+        Assert.Contains("[หน้า 2/", r.Text);
+    }
+
+    [Fact]
+    public async Task RecordFinding_SkipsStepsThatAreNotText()
+    {
+        var events = new List<AgentEvent>();
+        var r = await Box(null, emit: events.Add).ExecuteAsync(AgentToolbox.RecordFinding, "{\"kind\":\"path\",\"text\":\"t\",\"steps\":[\"a\",3,{\"x\":1},\"b\"]}", default);
+        Assert.False(r.IsError, r.Text);
+        Assert.Equal(new[] { "a", "b" }, events.OfType<FindingRecorded>().Single().Finding.Steps);
+    }
+
     // ---------- decompile ----------
     [Fact]
     public async Task Decompile_TypeByFullName_GivesItsCSharp()
