@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Windows.Input;
 using ReverseX.App.Services;
+using ReverseX.Core;
 using ReverseX.Core.Analysis;
 using ReverseX.Core.Analysis.Local;
 using ReverseX.Core.Files;
@@ -100,6 +101,7 @@ public sealed class InsightViewModel : AnalysisPageBase, IEvidenceSource
 
     protected override void ClearResult()
     {
+        foreach (var t in _tabs) t.Cancel();
         Subtitle = "";
         Stats = Array.Empty<StatCard>();
         Insights = Array.Empty<InsightRow>();
@@ -126,6 +128,7 @@ public sealed class InsightViewModel : AnalysisPageBase, IEvidenceSource
 
     private void Build(AnalysisSnapshot snap, string? keepTab)
     {
+        foreach (var t in _tabs) t.Cancel();
         List<InsightTab> tabs = new();
         List<Insight> insights = new();
         Subtitle = "";
@@ -204,7 +207,9 @@ public sealed class InsightViewModel : AnalysisPageBase, IEvidenceSource
             m.Sdks.Select(s => new object?[] { s.Name, s.Category, s.Classes }).ToList()));
         tabs.Add(new InsightTab("Packages", Cols("Package", "Classes"),
             m.Packages.Select(p => new object?[] { p.Name, p.Count }).ToList()));
-        tabs.Add(new InsightTab("Classes", Cols("Class"), m.Classes.Select(c => new object?[] { c }).ToList()));
+        // picking a class opens it as Java (JADX through REA); the list itself is read locally from the DEX files
+        tabs.Add(new InsightTab("Classes", Cols("Class"), m.Classes.Select(c => new object?[] { c }).ToList(),
+            (i, note, ct) => ClassJavaAsync(m.Classes[i], note, ct), Loc.Get("Ins.Java.Hint")));
         tabs.Add(new InsightTab("Native", Cols("Abi", "Name", "Size"),
             m.NativeLibs.Select(l => new object?[] { l.Abi, l.Name, l.Size }).ToList()));
         tabs.Add(new InsightTab("Certs", Cols("Scheme", "Subject", "ValidUntil", "Algorithm", "Sha"),
@@ -218,6 +223,35 @@ public sealed class InsightViewModel : AnalysisPageBase, IEvidenceSource
         tabs.Add(new InsightTab("Secrets", Cols("Kind", "Value", "Where"), m.Secrets.Select(s => new object?[] { s.Kind, s.Masked, s.Where }).ToList()));
         tabs.Add(new InsightTab("Files", Cols("Folder", "Files"), m.TopFolders.Select(f => new object?[] { f.Name, f.Count }).ToList()));
         if (m.ManifestXml.Length > 0) tabs.Add(new InsightTab("Manifest", m.ManifestXml));
+    }
+
+    private async Task<(string Text, string Note)> ClassJavaAsync(string className, IProgress<string> note, CancellationToken ct)
+    {
+        var apk = TargetPath;
+        if (apk is null) return ("", Loc.Get("Ins.Java.Hint"));
+        note.Report(Loc.Format("Ins.Java.Loading", className));
+        var steps = new Progress<(int Done, int Total)>(p => note.Report(Loc.Format("Ins.Java.Methods", className, p.Done, p.Total)));
+        try
+        {
+            var code = await Task.Run(() => Backend.AndroidClassJavaAsync(apk, className, steps, ct), ct).ConfigureAwait(true);
+            var parts = new List<string> { Loc.Format("Ins.Java.Source", code.Provider, code.MethodsShown, code.MethodCount) };
+            if (code.MethodsShown < code.MethodCount) parts.Add(Loc.Format("Ins.Java.Capped", code.MethodsShown));
+            if (code.FellBack > 0) parts.Add(Loc.Format("Ins.Java.Smali", code.FellBack));
+            if (code.NoBody > 0) parts.Add(Loc.Format("Ins.Java.NoBody", code.NoBody));
+            parts.Add(Loc.Get("Ins.Java.NoHeader"));
+            return (code.Text, string.Join(" · ", parts));
+        }
+        catch (AnalysisFailure f)
+        {
+            AppPaths.Log("Java view failed: " + className, f);
+            return ("", Loc.Get(f.Kind switch
+            {
+                AnalysisFailureKind.NotSupported => "Ins.Java.NoEngine",
+                AnalysisFailureKind.InputRejected => "Ins.Java.NoClass",
+                AnalysisFailureKind.Generic => "Code.Err.Failed",
+                var k => "Err." + k,
+            }));
+        }
     }
 
     // ───────── SQLite ─────────

@@ -58,7 +58,6 @@ internal static class ScreenshotMode
         try { File.Delete(tmp); } catch (IOException) { }
     }
 
-    /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe].</summary>
     /// <summary>--phase8 &lt;files…&gt;: opens each file (APK / SQLite / HAR / WASM / .NET) and shoots the Insight pages and the Evidence page.</summary>
     public static async Task RunPhase8Async(string dir, string[] files)
     {
@@ -106,6 +105,7 @@ internal static class ScreenshotMode
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 
+    /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe, apk]; "-" skips one.</summary>
     public static async Task RunPhase4Async(string dir, string[] files)
     {
         Directory.CreateDirectory(dir);
@@ -137,6 +137,16 @@ internal static class ScreenshotMode
                 Save(win, Path.Combine(dir, $"phase4-{page}{extra}-{(theme == UiPrefs.Sky ? "sky" : "night")}.png"));
             }
             ThemeManager.Apply(UiPrefs.Night, save: false);
+        }
+
+        // the tools card with the engine install offer (real probes of this machine)
+        await vm.Home.CheckToolsAsync(); await Flush(); Shoot("home", "-tools");
+        if (Environment.GetEnvironmentVariable("REVERSEX_SHOT_INSTALL") == "1" && vm.Engines.HasMissing)
+        {
+            // real install of what is missing (into REVERSEX_DATA_DIR), then the same reset + re-check the button runs
+            var install = vm.Engines.InstallAsync();
+            await Task.Delay(1500); await Flush(); Shoot("home", "-installing");
+            await install; await Flush(); Shoot("home", "-installed");
         }
 
         // empty pages first
@@ -178,6 +188,24 @@ internal static class ScreenshotMode
             {
                 vm.Binary.ViewAsm = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-asm");
                 vm.Binary.ViewAsm = false;
+            }
+        }
+        if (files.Length > 3 && files[3] != "-")
+        {
+            // APK → Java: the class list is local; picking MainActivity (or the first class) asks JADX through REA
+            await vm.OpenEntryAsync(files[3], FileKindDetector.Detect(files[3]).Kind);
+            await WaitReady(vm.Android);
+            vm.Select("Android");
+            if (vm.Android.Tabs.FirstOrDefault(t => t.Key == "Classes") is { } classes)
+            {
+                vm.Android.Tab = classes;
+                await Flush(); Shoot("android", "-classes");
+                var rows = classes.View?.Cast<System.Data.DataRowView>().ToList() ?? new List<System.Data.DataRowView>();
+                classes.SelectedRow = rows.FirstOrDefault(r => r["c0"] is string c && c.EndsWith(".MainActivity", StringComparison.Ordinal)) ?? rows.FirstOrDefault();
+                var until = DateTime.UtcNow.AddMinutes(5);
+                await Flush();
+                while (classes.DetailBusy && DateTime.UtcNow < until) await Task.Delay(300);
+                await Flush(); Shoot("android", "-java");
             }
         }
         win.Close();

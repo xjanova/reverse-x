@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using ReverseX.Core.Files;
 using ReverseX.Core.Rea;
@@ -268,5 +269,91 @@ public sealed class AnalysisRunner
         var tool = view == NativeCodeView.Assembly ? "procedure_assembly" : "procedure_pseudo_code";
         var text = await CallTextAsync(tool, new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
         return ReaResultParser.ParseCodeText(text);
+    }
+
+    // ───────────── Android → Java (JADX) ─────────────
+
+    /// <summary>The first JADX call on an APK loads it (a few seconds on a small app, longer on a big one); later calls are quick.</summary>
+    public static readonly TimeSpan AndroidCall = TimeSpan.FromMinutes(5);
+
+    /// <summary>Bodies fetched for one class view; each is one JADX call (~0.3 s), so huge classes stop here.</summary>
+    public const int MaxClassMethods = 80;
+
+    /// <summary>Members of one class. InputRejected when JADX has no class by that exact name.</summary>
+    public async Task<AndroidClassInfo> AndroidClassAsync(string apk, string className, CancellationToken ct)
+    {
+        var text = await CallTextAsync("inspect_android_class", new JsonObject
+        {
+            ["path"] = Path.GetFullPath(apk),
+            ["class_name"] = className,
+        }, AndroidCall, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseAndroidClass(text) ?? throw new AnalysisFailure(AnalysisFailureKind.Generic, "inspect_android_class: unreadable result");
+    }
+
+    public async Task<AndroidMethodCode> AndroidMethodAsync(string apk, string className, AndroidMethodRef method, CancellationToken ct)
+    {
+        var text = await CallTextAsync("inspect_android_method", new JsonObject
+        {
+            ["path"] = Path.GetFullPath(apk),
+            ["class_name"] = className,
+            ["method_name"] = method.Name,
+            ["overload_index"] = method.OverloadIndex,
+        }, AndroidCall, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseAndroidMethod(text);
+    }
+
+    /// <summary>
+    /// One class as Java. JADX MCP gives the member list and then one body per call, so the class is put together here: package,
+    /// fields, then every method in JADX's order (up to <see cref="MaxClassMethods"/>). There is no class declaration line because
+    /// JADX does not report modifiers or supertypes; the page says so. Names from a DEX listing use '$' for inner classes, which
+    /// JADX may spell with '.', so that spelling is tried when the first is unknown.
+    /// </summary>
+    public async Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct)
+    {
+        // ct is honoured between calls, not inside one: a request REA is already running finishes (at most one method body), so a new
+        // click never makes REA give up the APK it loaded. Timeouts and a dead process still end a call.
+        var call = CancellationToken.None;
+        ct.ThrowIfCancellationRequested();
+        AndroidClassInfo info;
+        try { info = await AndroidClassAsync(apk, className, call).ConfigureAwait(false); }
+        catch (AnalysisFailure f) when (f.Kind == AnalysisFailureKind.InputRejected && className.Contains('$', StringComparison.Ordinal))
+        {
+            ct.ThrowIfCancellationRequested();
+            info = await AndroidClassAsync(apk, className.Replace('$', '.'), call).ConfigureAwait(false);
+        }
+
+        var name = info.ClassName;
+        var cut = name.LastIndexOf('.');
+        var sb = new StringBuilder();
+        if (cut > 0) sb.Append("package ").Append(name, 0, cut).Append(";\n\n");
+        foreach (var f in info.Fields) sb.Append("    ").Append(f.Type).Append(' ').Append(f.Name).Append(";\n");
+        if (info.Fields.Count > 0) sb.Append('\n');
+
+        var shown = Math.Min(info.Methods.Count, MaxClassMethods);
+        int fellBack = 0, noBody = 0;
+        progress?.Report((0, shown));
+        for (var i = 0; i < shown; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var m = info.Methods[i];
+            AndroidMethodCode code;
+            try { code = await AndroidMethodAsync(apk, name, m, call).ConfigureAwait(false); }
+            catch (AnalysisFailure f) when (f.Kind == AnalysisFailureKind.InputRejected)
+            {
+                code = new AndroidMethodCode(null, "java", false, "", Array.Empty<string>());
+            }
+            if (code.FellBack || code.Representation != "java") fellBack++;
+            if (code.Text is null)
+            {
+                noBody++;
+                sb.Append("    /* ").Append(m.Signature).Append(" */\n\n");
+            }
+            else
+            {
+                sb.Append(code.Text.Replace("\r\n", "\n", StringComparison.Ordinal)).Append("\n\n");
+            }
+            progress?.Report((i + 1, shown));
+        }
+        return new AndroidClassCode(name, sb.ToString().TrimEnd() + "\n", info.Methods.Count, shown, fellBack, noBody, info.Limitations, info.Provider);
     }
 }

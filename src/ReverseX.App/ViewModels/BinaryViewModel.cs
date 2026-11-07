@@ -94,6 +94,13 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     public bool IsNative => _native is not null;
     public bool HasGo => _go is not null;
     public bool ShowNoEngine => _native is { EngineMissing: true };
+    /// <summary>REA on Windows hands only PE files to Ghidra; ELF and Mach-O need REA on Linux or macOS, so installing engines here would not help.</summary>
+    public bool NeedsOtherOs => ShowNoEngine && TargetKind is FileKind.Elf or FileKind.MachO;
+    public bool ShowEngineInstall => ShowNoEngine && !NeedsOtherOs && Engines is not null;
+    public string NoEngineTitle => Loc.Get(NeedsOtherOs ? "Nat.NoEngine.OtherOsTitle" : "Nat.NoEngine.Title");
+    public string NoEngineBody => Loc.Get(NeedsOtherOs ? "Nat.NoEngine.OtherOs" : "Nat.NoEngine.Body");
+    /// <summary>Shared install button (also on Home); null in tests and screenshot setups that do not need it.</summary>
+    public EngineSetupViewModel? Engines { get; init; }
     public bool HasSymbols => _all.Count > 0;
     public bool ShowSymbolPanes => IsReady && (IsDotNet || (IsNative && !ShowNoEngine));
     public bool ShowCenterPlain => IsReady && !ShowSymbolPanes;
@@ -221,6 +228,8 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     public IReadOnlyList<RefRow> Refs { get; private set; } = Array.Empty<RefRow>();
     public bool HasRefs => Refs.Count > 0;
+    /// <summary>Why the list is empty: native calls are read from the code itself, and a locally built .NET list has no CIL anchors.</summary>
+    public string NoRefsText => Loc.Get(IsNative ? "Nat.NoRefs" : _dotnet is { BuiltLocally: true } ? "Bin.NoRefsLocal" : "Bin.NoRefs");
     public IReadOnlyList<EvidenceRow> Evidence { get; private set; } = Array.Empty<EvidenceRow>();
     public string SelectedTitle => _selected is null ? "" : _selected.Name;
     public string SelectedSub => _selected?.Sub ?? "";
@@ -247,7 +256,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
         if (_dotnet is not null)
         {
+            // the author's types first; compiler output (regex generators, lambdas, state machines) after, in metadata order
             _all = _dotnet.Types
+                .OrderBy(t => IsGenerated(t.FullName))
                 .SelectMany(t => t.Methods.Select(m => new SymbolItem(m.Name, t.FullName, m.Token, m, null)))
                 .ToList();
             _tab = BinTab.Code;
@@ -278,13 +289,20 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
     private SymbolItem? PickFirst()
     {
         if (_dotnet is not null)
-            return _view.FirstOrDefault(i => i.Method is { HasBody: true, Anchors.Count: > 0 })
-                ?? _view.FirstOrDefault(i => i.Method is { HasBody: true });  // a locally built list has no anchors
+            return _view.FirstOrDefault(i => i.Method is { HasBody: true, Anchors.Count: > 0 } && IsPlain(i))
+                ?? _view.FirstOrDefault(i => i.Method is { HasBody: true } && IsPlain(i))  // a locally built list has no anchors
+                ?? _view.FirstOrDefault(i => i.Method is { HasBody: true });
         if (_native is not null && !FromSnapshot)
             return _view.FirstOrDefault(i => i.Proc is { External: false } p && p.Name == "entry")
                 ?? _view.FirstOrDefault(i => i.Proc is { External: false, Thunk: false });
         return null;
     }
+
+    /// <summary>Names only a compiler writes: &lt;PrivateImplementationDetails&gt;, Ns.&lt;RegexGenerator_g&gt;…, Outer+&lt;&gt;c, &lt;Main&gt;b__0_0.</summary>
+    internal static bool IsGenerated(string name) => name.Contains('<', StringComparison.Ordinal);
+
+    /// <summary>A method worth opening first: written by the author, not a constructor.</summary>
+    private static bool IsPlain(SymbolItem i) => !i.Name.StartsWith('.') && !IsGenerated(i.Name) && !IsGenerated(i.Sub);
 
     private string SubFor(NativeProcedure p) =>
         p.External ? Loc.Get("Nat.Import") : p.Thunk ? p.Address + " · " + Loc.Get("Nat.Thunk") : p.Address;
@@ -297,6 +315,7 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
 
     protected override void OnLanguageChanged()
     {
+        Raise(nameof(NoEngineTitle)); Raise(nameof(NoEngineBody)); Raise(nameof(NoRefsText));
         if (Snapshot is null) return;
         BuildStatic();
         if (_native is not null)
@@ -456,11 +475,12 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         foreach (var n in new[]
         {
             nameof(HasTarget), nameof(ShowEmpty), nameof(IsDotNet), nameof(IsNative), nameof(HasGo), nameof(ShowNoEngine),
+            nameof(NeedsOtherOs), nameof(ShowEngineInstall), nameof(NoEngineTitle), nameof(NoEngineBody),
             nameof(HasSymbols), nameof(ShowSymbolPanes), nameof(ShowCenterPlain), nameof(CodeTabLabel), nameof(Subtitle), nameof(Items), nameof(Search),
             nameof(AllCountText), nameof(TypeCountText), nameof(HasTypeCount), nameof(ListNote), nameof(SearchHint), nameof(Selected),
             nameof(Tab), nameof(TabCode), nameof(TabCil), nameof(TabMeta), nameof(TabGo), nameof(TabNative),
             nameof(ShowCode), nameof(ShowCil), nameof(ShowMeta), nameof(ShowGo), nameof(ShowNativeInfo), nameof(ShowSelectionHeader),
-            nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons),
+            nameof(MetaRows), nameof(Limitations), nameof(NativeRows), nameof(EngineReasons), nameof(NoRefsText),
             nameof(GoRows), nameof(GoDeps), nameof(GoSettings), nameof(GoDepsTitle), nameof(TargetName),
         }) Raise(n);
     }

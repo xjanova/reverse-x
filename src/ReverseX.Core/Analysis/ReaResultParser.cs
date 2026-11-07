@@ -381,6 +381,69 @@ public static class ReaResultParser
         }
     }
 
+    // ───────────── Android (JADX headless MCP) ─────────────
+
+    /// <summary>inspect_android_class: the class's methods (with overload indices), fields and inner classes. Null when unreadable.</summary>
+    public static AndroidClassInfo? ParseAndroidClass(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var ev = Unwrap(doc.RootElement);
+            var n = Prop(ev, "normalized_result");
+            var name = Str(n, "class_name");
+            if (name is null) return null;
+            var methods = Items(n, "methods")
+                .Where(m => Str(m, "name") is not null)
+                .Select(m => new AndroidMethodRef(Str(m, "name") ?? "", Str(m, "reported_signature") ?? Str(m, "name") ?? "",
+                    Int(m, "overload_index"), Prop(m, "is_constructor").ValueKind == JsonValueKind.True))
+                .ToList();
+            var fields = Items(n, "fields")
+                .Where(f => Str(f, "name") is not null)
+                .Select(f => new AndroidField(Str(f, "name") ?? "", Str(f, "reported_type") ?? "?"))
+                .ToList();
+            var inner = Items(n, "inner_classes")
+                .Select(i => i.ValueKind == JsonValueKind.String ? i.GetString() : Str(i, "class_name") ?? Str(i, "name"))
+                .OfType<string>()
+                .ToList();
+            return new AndroidClassInfo(name, methods, fields, inner, Strings(ev, "limitations"), ProviderOf(ev));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>inspect_android_method: one method's Java (or smali when JADX fell back). Never throws; unreadable text gives a null body.</summary>
+    public static AndroidMethodCode ParseAndroidMethod(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var n = Prop(Unwrap(doc.RootElement), "normalized_result");
+            var source = Prop(n, "source");
+            var text = source.ValueKind == JsonValueKind.String ? source.GetString() : Str(source, "text");
+            var markers = Items(n, "markers")
+                .Select(m => m.ValueKind == JsonValueKind.String ? m.GetString() : Str(m, "kind") ?? Str(m, "code"))
+                .OfType<string>()
+                .ToList();
+            return new AndroidMethodCode(text is { Length: > 0 } ? text.TrimEnd() : null, Str(n, "representation") ?? "java",
+                Prop(n, "fell_back").ValueKind == JsonValueKind.True, Str(source, "status") ?? Str(n, "body_status") ?? "", markers);
+        }
+        catch (JsonException)
+        {
+            return new AndroidMethodCode(null, "java", false, "", new List<string>());
+        }
+    }
+
+    private static string ProviderOf(JsonElement ev)
+    {
+        var p = Prop(ev, "provider");
+        var name = Str(p, "name") ?? Str(p, "id") ?? "";
+        var version = Str(p, "version");
+        return version is null ? name : name + " " + version;
+    }
+
     private static JsonElement FindPairArray(JsonElement e, int depth)
     {
         if (depth > 5) return default;

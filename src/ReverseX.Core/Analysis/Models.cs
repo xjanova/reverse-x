@@ -153,6 +153,27 @@ public enum NativeCodeView { PseudoCode, Assembly }
 /// <param name="Provider">e.g. "Ghidra 12.1.4".</param>
 public sealed record NativeCode(string? Text, IReadOnlyList<string> Limitations, string Provider);
 
+/// <param name="OverloadIndex">JADX's position among same-named methods; stable only within one REA session on one APK.</param>
+public sealed record AndroidMethodRef(string Name, string Signature, int OverloadIndex, bool IsConstructor);
+
+public sealed record AndroidField(string Name, string Type);
+
+/// <summary>What JADX reports for one class (members only; bodies come one method at a time).</summary>
+public sealed record AndroidClassInfo(string ClassName, IReadOnlyList<AndroidMethodRef> Methods, IReadOnlyList<AndroidField> Fields,
+    IReadOnlyList<string> InnerClasses, IReadOnlyList<string> Limitations, string Provider);
+
+/// <param name="Text">Decompiled body, or null when JADX had none.</param>
+/// <param name="Representation">"java", or "smali" when JADX could not decompile and fell back.</param>
+/// <param name="SourceStatus">"complete", "truncated", … as JADX reports it.</param>
+public sealed record AndroidMethodCode(string? Text, string Representation, bool FellBack, string SourceStatus, IReadOnlyList<string> Markers);
+
+/// <summary>One class assembled as Java: fields, then each method body in JADX's order.</summary>
+/// <param name="MethodsShown">Bodies fetched (at most <see cref="AnalysisRunner.MaxClassMethods"/>).</param>
+/// <param name="FellBack">Methods shown as smali because JADX could not decompile them.</param>
+/// <param name="NoBody">Methods JADX returned no text for.</param>
+public sealed record AndroidClassCode(string ClassName, string Text, int MethodCount, int MethodsShown, int FellBack, int NoBody,
+    IReadOnlyList<string> Limitations, string Provider);
+
 public sealed record NativeModel
 {
     public NativeIdentity? Identity { get; init; }

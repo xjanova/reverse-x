@@ -19,6 +19,8 @@ public interface IAnalysisBackend
     /// <summary>Pseudo-C or disassembly of one native function; needs a deep engine (Ghidra) for this file.</summary>
     Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct);
     Task<string> CallGraphAsync(string path, string address, CancellationToken ct);
+    /// <summary>One APK class as Java; needs the JADX MCP engine.</summary>
+    Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct);
 }
 
 public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
@@ -26,6 +28,8 @@ public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
     // One REA process stays up for the native file on screen: Ghidra's import + auto-analysis then happens once for the listing
     // and every function the user opens afterwards, instead of once per click.
     private readonly TargetSessionCache _native = new(StartAsync, (rea, path, ct) => new AnalysisRunner(rea).OpenAsync(path, ct));
+    // Same for the APK on the Android page: JADX loads the whole APK on its first call in a process, then answers each class quickly.
+    private readonly TargetSessionCache _android = new(StartAsync);
 
     private static async Task<NodeInfo> NodeAsync(CancellationToken ct) =>
         await NodeProbe.FindAsync(ct).ConfigureAwait(false)
@@ -60,23 +64,37 @@ public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
     }
 
     public Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct) =>
-        OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).NativeCodeAsync(procedure, view, c), ct);
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).NativeCodeAsync(procedure, view, c), ct);
 
     public Task<string> CallGraphAsync(string path, string address, CancellationToken ct) =>
-        OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).CallGraphAsync(address, c), ct);
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).CallGraphAsync(address, c), ct);
 
-    /// <summary>Runs on the kept native session; process-level failures become the same AnalysisFailure kinds the pages already map.</summary>
-    private async Task<T> OnNativeAsync<T>(string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct)
+    public Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct) =>
+        OnKeptAsync(_android, apk, (rea, c) => new AnalysisRunner(rea).AndroidClassJavaAsync(apk, className, progress, c), ct);
+
+    private Task<T> OnNativeAsync<T>(string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct) =>
+        OnKeptAsync(_native, path, work, ct);
+
+    /// <summary>Runs on a kept session; process-level failures become the same AnalysisFailure kinds the pages already map.</summary>
+    private static async Task<T> OnKeptAsync<T>(TargetSessionCache cache, string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct)
     {
-        try { return await _native.RunAsync(path, work, ct).ConfigureAwait(false); }
+        try { return await cache.RunAsync(path, work, ct).ConfigureAwait(false); }
         catch (TimeoutException ex) { throw new AnalysisFailure(AnalysisFailureKind.Timeout, ex.Message); }
         catch (ReaException ex) { throw new AnalysisFailure(AnalysisFailureKind.ReaUnavailable, ex.Message); }
     }
 
-    /// <summary>A newer engine became available (installed from the app): the kept process still runs without it.</summary>
-    public Task ResetNativeAsync() => _native.ResetAsync();
+    /// <summary>A newer engine became available (installed from the app): the kept processes still run without it.</summary>
+    public async Task ResetSessionsAsync()
+    {
+        await _native.ResetAsync().ConfigureAwait(false);
+        await _android.ResetAsync().ConfigureAwait(false);
+    }
 
-    public ValueTask DisposeAsync() => _native.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        try { await _native.DisposeAsync().ConfigureAwait(false); }
+        finally { await _android.DisposeAsync().ConfigureAwait(false); }
+    }
 }
 
 /// <summary>Shared run logic: snapshot first, otherwise a cancellable background analysis with progress. Never throws to the UI.</summary>

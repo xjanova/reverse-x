@@ -1,0 +1,76 @@
+{
+ "evidence_id": "ev_5a08e7183bd99e66eb9e57d250f0b5df606f36c85f56d4815f5857160293cc95",
+ "subject": {
+  "name": "C:\\samples\\app.apk",
+  "digest": {
+   "sha256": "4cb09d3fec7784889c410602d395082af7402e9a44753ce5cebd7597f4f824f3"
+  },
+  "format": "apk",
+  "architecture": null,
+  "local_path": "C:\\samples\\app.apk"
+ },
+ "provider": {
+  "id": "jadx",
+  "name": "JADX headless",
+  "version": "0.7.1"
+ },
+ "analysis_profile": null,
+ "predicate_type": "rea.analysis",
+ "operation": "inspect_android_method",
+ "parameters": {
+  "path": "C:\\samples\\app.apk",
+  "class_name": "A.a",
+  "method_name": "<init>"
+ },
+ "raw_result": {
+  "server": {
+   "name": "rea-jadx-bridge",
+   "version": "1"
+  },
+  "jar_sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+  "loaded": {
+   "state": "LOADED",
+   "apk_path": "C:\\Temp\\rea-android-0\\target.apk",
+   "class_count": 1178,
+   "resource_count": 410,
+   "threads": 1,
+   "resources": "full"
+  }
+ },
+ "normalized_result": {
+  "engine": {
+   "name": "jadx-headless-mcp",
+   "version": "0.7.1",
+   "artifact_sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+   "source_revision": "5844800a486d2248fa949b74c9896285f5b54de2",
+   "worker_count": 1,
+   "heap_limit_mib": 8144
+  },
+  "class_name": "A.a",
+  "method": {
+   "name": "<init>",
+   "reported_signature": "<init>(int, A.n, int): void",
+   "overload_index": 0,
+   "is_constructor": true,
+   "dex_descriptor": null
+  },
+  "overload_count": 1,
+  "representation": "java",
+  "body_status": "available",
+  "fell_back": false,
+  "markers": [],
+  "source": {
+   "status": "complete",
+   "text": "    public a(int i2, n nVar, int i3) {\r\n        this.f0f = i2;\r\n        this.f1g = nVar;\r\n        this.f2h = i3;\r\n    }",
+   "reported_total_bytes": null
+  }
+ },
+ "confidence": "derived",
+ "authority": "shipped-artifact",
+ "limitations": [
+  "Static decompiler observations do not establish runtime behavior; the APK is never executed.",
+  "Method signatures use provider display types; exact DEX descriptors and instruction offsets are unavailable. Overload indices are local to this engine and artifact.",
+  "Class inventories use parsed metadata before code generation, including synthetic members that may be omitted from decompiled source. Source positions remain unknown.",
+  "Manifest summary fields are extracted by the upstream engine; decoded XML is retained for verification. APK signatures, split APKs, native libraries and Android runtime capture are not verified by this provider."
+ ]
+}

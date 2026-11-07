@@ -67,8 +67,9 @@ public static class ToolStatusMapper
             return i.JavaMajor >= EngineCatalog.JadxMinJavaMajor
                 ? new("jadx", "JADX", ToolLevel.Ok, "jadx.ok")
                 : new("jadx", "JADX", ToolLevel.Warn, "jadx.noJdk");
+        // A jadx CLI on PATH is not enough: REA 6.4 answers capability_unavailable without the JAR.
         return i.JadxFound
-            ? new("jadx", "JADX", ToolLevel.Ok, "jadx.ok")
+            ? new("jadx", "JADX", ToolLevel.Warn, "jadx.cliOnly")
             : new("jadx", "JADX", ToolLevel.Bad, "jadx.missing");
     }
 

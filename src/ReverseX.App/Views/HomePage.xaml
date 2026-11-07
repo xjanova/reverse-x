@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:tools="clr-namespace:ReverseX.Core.Tools;assembly=ReverseX.Core"
              xmlns:conv="clr-namespace:ReverseX.App.Converters"
+             xmlns:views="clr-namespace:ReverseX.App.Views"
              AllowDrop="True" Background="Transparent"
              DragEnter="OnDrag" DragOver="OnDrag" DragLeave="OnDragLeave" Drop="OnDrop">
     <UserControl.Resources>
@@ -324,6 +325,7 @@
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
                         <Grid Margin="0,0,0,8" Height="28">
@@ -342,7 +344,8 @@
                             <Button Grid.Column="1" Style="{StaticResource Btn.Ghost}" MinHeight="26" Padding="12,2" FontSize="12"
                                     Content="{DynamicResource S.Tools.Recheck}" Command="{Binding RecheckCommand}"/>
                         </Grid>
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <views:EngineSetupStrip Grid.Row="1" Margin="0,0,0,6" DataContext="{Binding Engines}"/>
+                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl ItemsSource="{Binding Tools}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>

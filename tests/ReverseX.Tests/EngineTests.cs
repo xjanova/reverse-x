@@ -653,4 +653,13 @@ public sealed class EngineTests : IDisposable
         var i = new ToolProbeInputs(Node24, true, Doctor(), null, null, 21, false, null, EngineEnvironment.None);
         Assert.Equal("jadx.missing", Row(i, "jadx").MessageCode);
     }
+
+    [Fact]
+    public void Rows_JadxCliWithoutJar_IsNotReady()
+    {
+        var i = new ToolProbeInputs(Node24, true, Doctor(), null, null, 21, true, null, EngineEnvironment.None);
+        var row = Row(i, "jadx");
+        Assert.Equal("jadx.cliOnly", row.MessageCode);
+        Assert.Equal(ToolLevel.Warn, row.Level);
+    }
 }
