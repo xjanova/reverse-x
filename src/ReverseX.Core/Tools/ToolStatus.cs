@@ -12,6 +12,7 @@ public sealed record ToolProbeInputs(
     Rea.ReaDoctorReport? Doctor,
     Rea.ReaCapabilityReport? Providers,
     string? ReaFailure,          // null = ok, "timeout" or "failed"
-    int? JavaMajor,
+    int? JavaMajor,              // the JDK REA will use: the resolved engine JDK if any, else JAVA_HOME / PATH java
     bool JadxFound,
-    string? BrowserName);        // "Chrome" / "Edge" / null
+    string? BrowserName,         // "Chrome" / "Edge" / null
+    Engines.EngineEnvironment? Engines = null); // what REA is started with; null = not resolved

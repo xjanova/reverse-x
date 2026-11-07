@@ -303,3 +303,43 @@
 ### กติกาต่อจากนี้
 - ก่อนจะเขียนว่า "0 warning" ต้องตรวจด้วย `dotnet build ReverseX.slnx --no-incremental` ทุกครั้ง
 - build แบบ incremental ไม่คอมไพล์โปรเจกต์ที่ไม่เปลี่ยนซ้ำ warning ของโปรเจกต์นั้นจึงไม่แสดง
+
+---
+
+## ติดตั้ง engine ให้ REA (ส่วน Core): Ghidra 12.1.4, JDK 21, JADX MCP JAR
+
+### ทำไม
+- REA ถอด PE x86/x64 เป็น pseudo-C ได้ก็ต่อเมื่อมี Ghidra 12.1.x (`GHIDRA_INSTALL_DIR`) กับ JDK 21 ส่วน Android ต้องมี `REA_JADX_MCP_JAR` กับ JDK 17 ขึ้นไป
+- ผู้ใช้ทั่วไปไม่มีสักอย่าง และแอปไม่เคยส่งตัวแปรเหล่านี้ให้ REA
+
+### ทำอะไร
+- `Core/Engines/EngineCatalog`: ปักหมุด 3 ตัว คือ Ghidra 12.1.4, Temurin JDK 21.0.13+9 และ jadx-headless-mcp 0.7.1 (ตรงกับที่ REA 6.4.0 pin ไว้ใน `JadxRelease.js`)
+  - แต่ละตัวมี url, ขนาด, sha256, ชื่อโฟลเดอร์, ไฟล์ probe และบอกว่าเป็น ZIP หรือไฟล์เดี่ยว
+- `EngineLocator`: เลือกว่าจะให้ REA ใช้ตัวไหน
+  - Ghidra: ของผู้ใช้ถ้าเป็น 12.1.x ไม่อย่างนั้นใช้ของแอป
+  - JDK: ของแอปก่อน ไม่อย่างนั้นใช้ `JAVA_HOME` ที่ไฟล์ `release` บอกว่าเป็น 21 ขึ้นไป
+  - JAR: ของผู้ใช้ถ้าไฟล์มีอยู่จริง ไม่อย่างนั้นใช้ของแอป
+  - คืน env map: `GHIDRA_INSTALL_DIR`, `JAVA_HOME`, `PATH` (เติม `<jdk>\bin` ไว้หน้าสุด) และ `REA_JADX_MCP_JAR` ไม่ลบค่าใดที่ผู้ใช้ตั้งไว้
+- `EngineInstaller`: ทำตามลำดับนี้
+  - เช็คพื้นที่ดิสก์ก่อน (ZIP ใช้ 4 เท่าของขนาด ไฟล์เดี่ยวใช้ 1 เท่า)
+  - โหลดลง `engines\.download\*.part` และคำนวณ SHA-256 ไประหว่างเขียน แล้วตรวจขนาดกับ hash
+  - แกะลง `.staging-<guid>` โดยตรวจ path ของทุก entry ก่อนเขียนอะไรเลย (กัน `..`, path แบบ absolute, drive letter และ `:` ของ ADS)
+  - ตรวจไฟล์ probe แล้ว rename เข้าที่ในครั้งเดียว เขียน `<folder>.installed.json`
+  - ถ้าล้มหรือถูกยกเลิก จะลบ `.part` และ staging ทิ้ง ของเดิมที่ใช้ได้อยู่ไม่ถูกแตะ
+  - มี lock file กันการติดตั้งซ้อนกัน (`Busy`) ถ้าเจอโฟลเดอร์เสียจะติดตั้งทับเฉพาะโฟลเดอร์นั้น
+- `ReaLauncher.Create`: ใส่ env map ทุกครั้งที่เปิด REA (ทั้ง MCP และ CLI) ก่อน `NO_COLOR`
+- `ToolCheckService` / `ToolStatusMapper`: แถว Ghidra/JADX คิดจาก JDK ตัวเดียวกับที่ส่งให้ REA เพิ่มรหัส `ghidra.rejected` และ `jadx.noJdk`
+
+### ผล
+- `EngineTests` 56 เทสต์ ใช้ ZIP ที่สร้างในหน่วยความจำกับ handler ปลอม ไม่โหลดไฟล์จริง
+- ตรวจกับไฟล์จริงที่โหลดไว้ในเครื่องแล้ว (เสิร์ฟจากดิสก์ผ่าน handler ปลอม เทสต์นี้ไม่ได้ commit):
+  - ติดตั้งครบ 3 ตัวใน 15 วินาที hash, ขนาด และชื่อโฟลเดอร์ตรงทั้งหมด
+  - แถวขึ้น `ghidra.ok` และ `jadx.ok` แม้ `JAVA_HOME` ของเครื่องจะเป็น JDK 17
+  - `open_binary` + `procedure_pseudo_code` ได้ผลจาก Ghidra 12.1.4 และรันติดตั้งซ้ำใช้ 0 ms
+- path ยาว: Ghidra มี 5,219 ไฟล์ path ยาวสุด 128 ตัวอักษร (นับจากโฟลเดอร์ Ghidra) ใต้ `%LOCALAPPDATA%\ReverseX\engines\` รวมแล้วราว 190 ตัว (ตอนอยู่ใน staging เพิ่มอีก 42)
+  - .NET 8 จัดการ path ที่เกิน 260 ได้เองอยู่แล้ว ที่ยังเสี่ยงคือชื่อผู้ใช้ที่ยาวมาก หรือ `REVERSEX_DATA_DIR` ที่อยู่ลึก
+
+### ข้อจำกัดที่ยังเหลือ
+- ปุ่มและข้อความใน UI ยังไม่ได้ทำ (lead ทำแยก) ต้องเพิ่ม `S.Tool.Msg.ghidra.rejected` และ `S.Tool.Msg.jadx.noJdk` ทั้งไทยและอังกฤษ
+- ยังไม่ได้ลอง JADX กับ APK จริง
+- locator ไม่ hash ไฟล์ใหม่ทุกครั้งที่เปิด REA ตรวจแค่ไฟล์ probe
