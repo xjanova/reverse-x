@@ -13,7 +13,9 @@
         </Grid.RowDefinitions>
         <StackPanel Margin="4,4,0,10">
             <TextBlock Style="{StaticResource T.H1}" Text="{DynamicResource S.Nav.Settings}"/>
-            <TextBlock Style="{StaticResource T.Sub}" Margin="2,8,0,0" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}" Text="{DynamicResource S.Set.Soon}" TextTrimming="CharacterEllipsis"/>
+            <Border Style="{StaticResource PageSubPlate}">
+                <TextBlock Style="{StaticResource T.PageSub}" Text="{DynamicResource S.Set.Soon}"/>
+            </Border>
         </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">

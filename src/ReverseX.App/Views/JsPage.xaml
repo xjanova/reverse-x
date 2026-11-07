@@ -27,8 +27,12 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Style="{StaticResource T.H1}" Text="{Binding TargetName}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Style="{StaticResource T.Sub}" Margin="2,8,0,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}" Text="{Binding Subtitle}"/>
-                <TextBlock Margin="2,2,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}" Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}"/>
+                <Border Style="{StaticResource PageSubPlate}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource T.PageSub}" Text="{Binding Subtitle}"/>
+                        <TextBlock Margin="0,2,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <Button Style="{StaticResource Btn.Ghost}" Content="{DynamicResource S.Run.Reanalyze}" Command="{Binding ReanalyzeCommand}" Margin="0,0,8,0"/>

@@ -666,4 +666,16 @@ public sealed class EngineTests : IDisposable
         Assert.Equal("jadx.cliOnly", row.MessageCode);
         Assert.Equal(ToolLevel.Warn, row.Level);
     }
+
+    [Theory]
+    [InlineData(512L, "512 B")]
+    [InlineData(81_369_088L, "77.6 MB")]
+    [InlineData(569_376_768L, "543 MB")]
+    [InlineData(3_113_851_290L, "2.9 GB")]
+    public void ByteSize_KeepsNumberAndUnitOnOneLine(long bytes, string expected)
+    {
+        var s = ReverseX.Core.Files.ByteSize.Format(bytes);
+        Assert.Equal(expected, s);
+        Assert.False(s.Contains(' '));
+    }
 }

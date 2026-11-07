@@ -68,10 +68,11 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,12,0">
-                    <TextBlock Style="{StaticResource T.H1}" Text="{DynamicResource S.Home.Title}" VerticalAlignment="Center"/>
-                    <TextBlock Style="{StaticResource T.Sub}" Margin="12,6,0,0" VerticalAlignment="Center" FontSize="12.5" Foreground="{DynamicResource B.Text2}"
-                               Text="{DynamicResource S.Home.Subtitle}" MaxWidth="260" TextWrapping="NoWrap"/>
+                <StackPanel VerticalAlignment="Center" Margin="4,0,12,0">
+                    <TextBlock Style="{StaticResource T.H1}" Text="{DynamicResource S.Home.Title}"/>
+                    <Border Style="{StaticResource PageSubPlate}">
+                        <TextBlock Style="{StaticResource T.PageSub}" Text="{DynamicResource S.Home.Subtitle}" ToolTip="{DynamicResource S.Home.Subtitle}"/>
+                    </Border>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <ContentControl Style="{StaticResource Chip.Cyan}" Padding="12,5" FontSize="12.5" Margin="0,0,8,0">

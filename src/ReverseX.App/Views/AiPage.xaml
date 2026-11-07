@@ -204,7 +204,9 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Style="{StaticResource T.H1}" Text="{DynamicResource S.Nav.Ai}"/>
-                <TextBlock Style="{StaticResource T.Sub}" Margin="2,8,0,0" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}" Text="{DynamicResource S.Ai.Desc}" TextTrimming="CharacterEllipsis"/>
+                <Border Style="{StaticResource PageSubPlate}">
+                    <TextBlock Style="{StaticResource T.PageSub}" Text="{DynamicResource S.Ai.Desc}"/>
+                </Border>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <ContentControl Style="{StaticResource Chip.Violet}" Content="{Binding ModelName}" Margin="0,0,8,0" Padding="12,5"/>

@@ -79,6 +79,21 @@
         <Setter Property="Foreground" Value="{DynamicResource B.Text3}"/>
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
+    <!-- คำบรรยายใต้หัวข้อหน้า: วางบนแผ่นกระจก PageSubPlate เพราะภาพพื้นหลังตรงนั้นมีแสงจ้า เงาอย่างเดียวไม่พอ -->
+    <Style x:Key="T.PageSub" TargetType="TextBlock" BasedOn="{StaticResource T.Sub}">
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource B.Text}"/>
+    </Style>
+    <Style x:Key="PageSubPlate" TargetType="Border">
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="Margin" Value="0,8,0,0"/>
+        <Setter Property="Padding" Value="10,3,10,4"/>
+        <Setter Property="CornerRadius" Value="9"/>
+        <Setter Property="Background" Value="{DynamicResource B.SubPlate}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource B.SubPlateLine}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
     <Style x:Key="T.Num" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource F.Num}"/>
         <Setter Property="FontSize" Value="38"/>

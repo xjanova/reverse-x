@@ -58,8 +58,9 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Style="{StaticResource T.H1}" Text="{Binding TargetName}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Style="{StaticResource T.Sub}" Margin="2,8,0,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}"
-                           Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}"/>
+                <Border Style="{StaticResource PageSubPlate}">
+                    <TextBlock Style="{StaticResource T.PageSub}" Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}"/>
+                </Border>
                 <TextBlock Margin="2,2,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}"
                            Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}"/>
             </StackPanel>

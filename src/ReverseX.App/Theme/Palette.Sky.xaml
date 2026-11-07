@@ -105,6 +105,8 @@
     <SolidColorBrush x:Key="B.GreySoft" Color="#1F6B7A94"/>
     <SolidColorBrush x:Key="B.GreySoftLine" Color="#666B7A94"/>
     <SolidColorBrush x:Key="B.GreyText" Color="#44546E"/>
+    <SolidColorBrush x:Key="B.SubPlate" Color="#CCFFFFFF"/>
+    <SolidColorBrush x:Key="B.SubPlateLine" Color="#99FFFFFF"/>
 
     <DropShadowEffect x:Key="E.Num" BlurRadius="0" ShadowDepth="1.5" Direction="270" Color="#FFFFFF" Opacity="0.95"/>
     <DropShadowEffect x:Key="E.Title" BlurRadius="0" ShadowDepth="1.5" Direction="270" Color="#FFFFFF" Opacity="0.95"/>
