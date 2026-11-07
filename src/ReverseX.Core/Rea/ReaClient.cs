@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using ReverseX.Core.Engines;
 
 namespace ReverseX.Core.Rea;
 
@@ -25,6 +26,8 @@ public sealed class ReaClientOptions
     public TimeSpan StartupTimeout { get; init; } = TimeSpan.FromMinutes(3);
     public string? WorkingDirectory { get; init; }
     public string ProtocolVersion { get; init; } = "2025-06-18";
+    /// <summary>Engines for this process; null resolves the app's default selection when it starts.</summary>
+    public EngineEnvironment? Engines { get; init; }
 }
 
 /// <summary>
@@ -73,7 +76,7 @@ public sealed class ReaClient : IAsyncDisposable
     public static async Task<ReaClient> StartAsync(ReaClientOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(options.Node);
-        var psi = ReaLauncher.Create(options.Node, new[] { "mcp" }, options.WorkingDirectory);
+        var psi = ReaLauncher.Create(options.Node, new[] { "mcp" }, options.WorkingDirectory, options.Engines);
         var process = Process.Start(psi) ?? throw new ReaException("Could not start the REA process.");
         var client = new ReaClient(options, process);
         try

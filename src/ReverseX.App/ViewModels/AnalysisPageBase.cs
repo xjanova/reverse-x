@@ -18,6 +18,8 @@ public interface IAnalysisBackend
     Task<AnalysisSnapshot> AnalyzeAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct);
     /// <summary>Pseudo-C or disassembly of one native function; needs a deep engine (Ghidra) for this file.</summary>
     Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct);
+    /// <summary>Callers and callees of one native function, on the same kept engine session as the code.</summary>
+    Task<NativeRefs> NativeRefsAsync(string path, string procedure, CancellationToken ct);
     Task<string> CallGraphAsync(string path, string address, CancellationToken ct);
     /// <summary>One APK class as Java; needs the JADX MCP engine.</summary>
     Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct);
@@ -65,6 +67,9 @@ public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
 
     public Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct) =>
         OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).NativeCodeAsync(procedure, view, c), ct);
+
+    public Task<NativeRefs> NativeRefsAsync(string path, string procedure, CancellationToken ct) =>
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).NativeRefsAsync(procedure, c), ct);
 
     public Task<string> CallGraphAsync(string path, string address, CancellationToken ct) =>
         OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).CallGraphAsync(address, c), ct);

@@ -153,12 +153,12 @@ internal static class ScreenshotMode
         vm.Select("Binary"); await Flush(); Shoot("binary", "-empty");
         vm.Select("Js"); await Flush(); Shoot("js", "-empty");
 
-        // the code pane loads after the page is Ready (C# decompile, or Ghidra's first whole-file analysis for native)
+        // the code pane loads after the page is Ready (C# decompile, or Ghidra's first whole-file analysis for native), the native refs after it
         async Task WaitCode(TimeSpan max)
         {
             await Flush();
             var until = DateTime.UtcNow + max;
-            while (vm.Binary.CodeBusy && DateTime.UtcNow < until) await Task.Delay(300);
+            while ((vm.Binary.CodeBusy || vm.Binary.RefsBusy) && DateTime.UtcNow < until) await Task.Delay(300);
             await Flush();
         }
 
@@ -187,7 +187,13 @@ internal static class ScreenshotMode
             if (vm.Binary.ShowSymbolPanes)
             {
                 vm.Binary.ViewAsm = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-asm");
-                vm.Binary.ViewAsm = false;
+                vm.Binary.ViewAsm = false; await WaitCode(TimeSpan.FromMinutes(2));
+                // follow the first function the selected one calls, as a click on the refs card does
+                if (vm.Binary.Refs.FirstOrDefault(r => r.CanOpen && r.Kind == BinaryViewModel.CalleeMark) is { } callee)
+                {
+                    vm.Binary.OpenRefCommand.Execute(callee);
+                    await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-ref");
+                }
             }
         }
         if (files.Length > 3 && files[3] != "-")

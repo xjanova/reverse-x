@@ -18,6 +18,31 @@
             </Setter>
         </Style>
 
+        <!-- แถวอ้างอิงที่กดแล้วไปยังฟังก์ชันนั้น (แถวที่เปิดไม่ได้ปุ่มจะปิดไว้และหน้าตาเหมือนข้อความธรรมดา) -->
+        <Style x:Key="RefLink" TargetType="Button">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="Transparent" CornerRadius="7" Padding="4,1">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="True">
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource B.Row}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bg" Property="Background" Value="Transparent"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SymbolItem" TargetType="ListBoxItem">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
@@ -173,7 +198,7 @@
                             <ContentControl Style="{StaticResource Chip.Violet}" Margin="6,0,0,0" Content="{Binding TypeCountText}"
                                             Visibility="{Binding HasTypeCount, Converter={StaticResource B2V}}"/>
                         </StackPanel>
-                        <ListBox Grid.Row="2" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}"
+                        <ListBox Grid.Row="2" ItemsSource="{Binding Items}" SelectedItem="{Binding Selected, Mode=TwoWay}" SelectionChanged="OnSymbolSelectionChanged"
                                  Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource SymbolItem}"
                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
@@ -318,19 +343,36 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Style="{StaticResource T.H2}" FontSize="15" Text="{DynamicResource S.Bin.Refs}"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource T.H2}" FontSize="15" Text="{Binding RefsTitle}"/>
+                                <ProgressBar Width="50" Height="5" IsIndeterminate="True" Margin="10,0,0,0" VerticalAlignment="Center"
+                                             Visibility="{Binding RefsBusy, Converter={StaticResource B2V}}"/>
+                            </StackPanel>
                             <ListBox Grid.Row="1" Margin="0,8,0,0" ItemsSource="{Binding Refs}" ItemContainerStyle="{StaticResource PlainItem}"
                                      Background="Transparent" BorderThickness="0" Focusable="False" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
-                                        <Grid Margin="0,2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Kind}" FontSize="10.5" Width="38" Foreground="{DynamicResource B.Gold}" VerticalAlignment="Top" Margin="0,2,0,0"/>
-                                            <TextBlock Grid.Column="1" Text="{Binding Text}" FontFamily="{StaticResource F.Mono}" FontSize="11.5" TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource B.Text}"/>
+                                        <Grid>
+                                            <!-- native: "ถูกเรียกจาก (n)" / "เรียกไปยัง (n)" -->
+                                            <TextBlock Text="{Binding Text}" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource B.Text2}" Margin="0,8,0,2"
+                                                       Visibility="{Binding IsHeader, Converter={StaticResource B2V}}"/>
+                                            <Button Style="{StaticResource RefLink}" Visibility="{Binding IsRow, Converter={StaticResource B2V}}" IsEnabled="{Binding CanOpen}"
+                                                    CommandParameter="{Binding}"
+                                                    Command="{Binding DataContext.OpenRefCommand, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                                <Grid Margin="0,1">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding Kind}" FontSize="10.5" Width="38" Foreground="{DynamicResource B.Gold}" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                                    <StackPanel Grid.Column="1">
+                                                        <TextBlock Text="{Binding Text}" FontFamily="{StaticResource F.Mono}" FontSize="11.5" TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource B.Text}"/>
+                                                        <TextBlock Text="{Binding Sub}" FontSize="10.5" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text3}"
+                                                                   Visibility="{Binding HasSub, Converter={StaticResource B2V}}"/>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Button>
                                         </Grid>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
