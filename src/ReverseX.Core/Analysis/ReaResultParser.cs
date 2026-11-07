@@ -344,11 +344,41 @@ public static class ReaResultParser
             var arr = FindPairArray(doc.RootElement, 0);
             if (arr.ValueKind != JsonValueKind.Array) return list;
             foreach (var it in arr.EnumerateArray())
-                if (it.ValueKind == JsonValueKind.Object)
-                    list.Add(new NativeProcedure(Str(it, "address") ?? "", Str(it, "value") ?? Str(it, "name") ?? ""));
+            {
+                if (it.ValueKind != JsonValueKind.Object) continue;
+                // Ghidra lists imports too ("EXTERNAL:0x1" = KERNEL32.DLL::FreeLibrary): they have no body in this file.
+                var proc = Prop(it, "procedure");
+                list.Add(new NativeProcedure(Str(it, "address") ?? "", Str(it, "value") ?? Str(it, "name") ?? "",
+                    Prop(proc, "external").ValueKind == JsonValueKind.True,
+                    Prop(proc, "thunk").ValueKind == JsonValueKind.True));
+            }
         }
         catch (JsonException) { }
         return list;
+    }
+
+    /// <summary>
+    /// procedure_pseudo_code / procedure_assembly: the engine's text is raw_result.value (Ghidra may answer null for a body it could
+    /// not decompile). Returns null text in that case, never throws on shape.
+    /// </summary>
+    public static NativeCode ParseCodeText(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var ev = Unwrap(doc.RootElement);
+            var raw = Prop(ev, "raw_result");
+            var text = raw.ValueKind == JsonValueKind.String ? raw.GetString() : Str(raw, "value");
+            var limits = Strings(raw, "limitations");
+            if (limits.Count == 0) limits = Strings(ev, "limitations");
+            var provider = Str(Prop(ev, "provider"), "name") ?? Str(Prop(ev, "provider"), "id") ?? "";
+            var version = Str(Prop(ev, "provider"), "version");
+            return new NativeCode(text?.Trim('\r', '\n'), limits, version is null ? provider : provider + " " + version);
+        }
+        catch (JsonException)
+        {
+            return new NativeCode(null, new List<string>(), "");
+        }
     }
 
     private static JsonElement FindPairArray(JsonElement e, int depth)

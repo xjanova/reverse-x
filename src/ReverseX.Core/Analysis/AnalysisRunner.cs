@@ -42,6 +42,8 @@ public sealed class AnalysisRunner
     public const int ModuleCap = 5000;
     public const int ProcedureCap = 20000;
     private static readonly TimeSpan Long = TimeSpan.FromMinutes(5);
+    /// <summary>The first native query waits for Ghidra's import + auto-analysis, which takes minutes on a large binary.</summary>
+    public static readonly TimeSpan NativeLong = TimeSpan.FromMinutes(30);
 
     private readonly IReaToolCaller _rea;
     private readonly Func<string, CancellationToken, Task<string>>? _managedMembersCli;
@@ -216,7 +218,7 @@ public sealed class AnalysisRunner
 
         ct.ThrowIfCancellationRequested();
         Report(progress, "native.procs", 2, 3);
-        var r = await _rea.CallAsync("list_procedures", new JsonObject(), Long, ct).ConfigureAwait(false);
+        var r = await _rea.CallAsync("list_procedures", new JsonObject(), NativeLong, ct).ConfigureAwait(false);
         if (r.IsError)
         {
             var err = ReaResultParser.ParseError(r.Text);
@@ -232,11 +234,19 @@ public sealed class AnalysisRunner
     public async Task OpenAsync(string path, CancellationToken ct) =>
         await CallTextAsync("open_binary", new JsonObject { ["path"] = Path.GetFullPath(path) }, Long, ct).ConfigureAwait(false);
 
-    /// <summary>Dossier for one native function (pseudo-code, assembly, callers…). Needs an engine; returns REA's JSON text.</summary>
-    public Task<string> AnalyzeFunctionAsync(string procedure, CancellationToken ct) =>
-        CallTextAsync("analyze_function", new JsonObject { ["procedure"] = procedure }, Long, ct);
-
     /// <summary>Caller/callee graph around one address. Needs an engine; returns REA's JSON text.</summary>
     public Task<string> CallGraphAsync(string address, CancellationToken ct) =>
-        CallTextAsync("get_call_graph", new JsonObject { ["address"] = address }, Long, ct);
+        CallTextAsync("get_call_graph", new JsonObject { ["address"] = address }, NativeLong, ct);
+
+    /// <summary>
+    /// The engine's pseudo-C or disassembly of one function (by address or symbol). The binary must already be open in this session.
+    /// REA errors become AnalysisFailure (InputRejected: no function there; NotSupported: no engine for this file). Timeouts and a dead
+    /// process stay TimeoutException / ReaException so a <see cref="TargetSessionCache"/> can drop the session first.
+    /// </summary>
+    public async Task<NativeCode> NativeCodeAsync(string procedure, NativeCodeView view, CancellationToken ct)
+    {
+        var tool = view == NativeCodeView.Assembly ? "procedure_assembly" : "procedure_pseudo_code";
+        var text = await CallTextAsync(tool, new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseCodeText(text);
+    }
 }

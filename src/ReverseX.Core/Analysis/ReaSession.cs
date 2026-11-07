@@ -3,8 +3,13 @@ using ReverseX.Core.Rea;
 
 namespace ReverseX.Core.Analysis;
 
+/// <summary>A REA process the caller owns: tool calls plus the end of its life.</summary>
+public interface IReaSession : IReaToolCaller, IAsyncDisposable
+{
+}
+
 /// <summary>One REA MCP process for one analysis: starts on first use, keeps retained evidence alive between calls, dies on dispose.</summary>
-public sealed class ReaSession : IReaToolCaller, IAsyncDisposable
+public sealed class ReaSession : IReaSession
 {
     private readonly NodeInfo _node;
     private ReaClient? _client;

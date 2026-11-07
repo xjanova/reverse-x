@@ -15,41 +15,52 @@ public enum RunState { Idle, Running, Ready, Failed }
 public interface IAnalysisBackend
 {
     Task<AnalysisSnapshot> AnalyzeAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct);
-    Task<string> FunctionDossierAsync(string path, string procedure, CancellationToken ct);
+    /// <summary>Pseudo-C or disassembly of one native function; needs a deep engine (Ghidra) for this file.</summary>
+    Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct);
     Task<string> CallGraphAsync(string path, string address, CancellationToken ct);
 }
 
-public sealed class ReaAnalysisBackend : IAnalysisBackend
+public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
 {
+    // One REA process stays up for the native file on screen: Ghidra's import + auto-analysis then happens once for the listing
+    // and every function the user opens afterwards, instead of once per click.
+    private readonly TargetSessionCache _native = new(StartAsync, (rea, path, ct) => new AnalysisRunner(rea).OpenAsync(path, ct));
+
     private static async Task<NodeInfo> NodeAsync(CancellationToken ct) =>
         await NodeProbe.FindAsync(ct).ConfigureAwait(false)
         ?? throw new AnalysisFailure(AnalysisFailureKind.NoNode, "node not found");
 
+    private static async Task<IReaSession> StartAsync(CancellationToken ct) => new ReaSession(await NodeAsync(ct).ConfigureAwait(false));
+
     public async Task<AnalysisSnapshot> AnalyzeAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct)
     {
+        if (kind is FileKind.Pe or FileKind.Elf or FileKind.MachO)
+            return await OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).AnalyzeAsync(path, kind, progress, c), ct).ConfigureAwait(false);
+
         var node = await NodeAsync(ct).ConfigureAwait(false);
         await using var session = new ReaSession(node);
         var runner = new AnalysisRunner(session, ReaSession.ManagedMembersViaCli(node));
         return await runner.AnalyzeAsync(path, kind, progress, ct).ConfigureAwait(false);
     }
 
-    public async Task<string> FunctionDossierAsync(string path, string procedure, CancellationToken ct)
+    public Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct) =>
+        OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).NativeCodeAsync(procedure, view, c), ct);
+
+    public Task<string> CallGraphAsync(string path, string address, CancellationToken ct) =>
+        OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).CallGraphAsync(address, c), ct);
+
+    /// <summary>Runs on the kept native session; process-level failures become the same AnalysisFailure kinds the pages already map.</summary>
+    private async Task<T> OnNativeAsync<T>(string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct)
     {
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session);
-        await runner.OpenAsync(path, ct).ConfigureAwait(false);
-        return await runner.AnalyzeFunctionAsync(procedure, ct).ConfigureAwait(false);
+        try { return await _native.RunAsync(path, work, ct).ConfigureAwait(false); }
+        catch (TimeoutException ex) { throw new AnalysisFailure(AnalysisFailureKind.Timeout, ex.Message); }
+        catch (ReaException ex) { throw new AnalysisFailure(AnalysisFailureKind.ReaUnavailable, ex.Message); }
     }
 
-    public async Task<string> CallGraphAsync(string path, string address, CancellationToken ct)
-    {
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session);
-        await runner.OpenAsync(path, ct).ConfigureAwait(false);
-        return await runner.CallGraphAsync(address, ct).ConfigureAwait(false);
-    }
+    /// <summary>A newer engine became available (installed from the app): the kept process still runs without it.</summary>
+    public Task ResetNativeAsync() => _native.ResetAsync();
+
+    public ValueTask DisposeAsync() => _native.DisposeAsync();
 }
 
 /// <summary>Shared run logic: snapshot first, otherwise a cancellable background analysis with progress. Never throws to the UI.</summary>

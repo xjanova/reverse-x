@@ -396,9 +396,9 @@ public sealed class BinaryViewModel : AnalysisPageBase, IEvidenceSource
         DossierText = "…";
         try
         {
-            var text = await Task.Run(() => graph
-                ? Backend.CallGraphAsync(path, item.Proc.Address, cts.Token)
-                : Backend.FunctionDossierAsync(path, item.Proc.Address, cts.Token)).ConfigureAwait(true);
+            var text = await Task.Run(async () => graph
+                ? await Backend.CallGraphAsync(path, item.Proc.Address, cts.Token).ConfigureAwait(false)
+                : (await Backend.NativeCodeAsync(path, item.Proc.Address, NativeCodeView.PseudoCode, cts.Token).ConfigureAwait(false)).Text ?? "").ConfigureAwait(true);
             if (!ReferenceEquals(_dossierCts, cts)) return;
             DossierText = Pretty(text);
         }

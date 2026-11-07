@@ -141,7 +141,15 @@ public sealed record NativeIdentity(string Path, string Format, string Kind, str
 
 public sealed record EngineRejection(string ProviderId, string Code, string Reason);
 
-public sealed record NativeProcedure(string Address, string Name);
+/// <param name="External">An import from another module (Ghidra's EXTERNAL space): listed for reference, there is no code to show.</param>
+/// <param name="Thunk">A jump stub to another function.</param>
+public sealed record NativeProcedure(string Address, string Name, bool External = false, bool Thunk = false);
+
+public enum NativeCodeView { PseudoCode, Assembly }
+
+/// <param name="Text">The engine's text, or null when it produced none for this function.</param>
+/// <param name="Provider">e.g. "Ghidra 12.1.4".</param>
+public sealed record NativeCode(string? Text, IReadOnlyList<string> Limitations, string Provider);
 
 public sealed record NativeModel
 {
