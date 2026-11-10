@@ -1,3 +1,4 @@
+using ReverseX.Core.Engines;
 using ReverseX.Core.Rea;
 
 namespace ReverseX.Core.Tools;
@@ -7,7 +8,12 @@ public static class ToolCheckService
 {
     public static async Task<IReadOnlyList<ToolStatus>> CheckAsync(CancellationToken ct = default)
     {
-        var javaTask = SafeAsync(() => LocalToolProbe.JavaMajorAsync(ct));
+        // Same selection ReaLauncher passes to REA, so the Ghidra/JADX rows describe what REA actually gets.
+        var engines = EngineLocator.ResolveDefault();
+        var engineJava = engines.JavaHome is { } home ? EngineLocator.ReadJavaMajor(home) : null;
+        var javaTask = engineJava is not null
+            ? Task.FromResult(engineJava)
+            : SafeAsync(() => LocalToolProbe.JavaMajorAsync(ct));
         var localTask = Task.Run(() => (Jadx: LocalToolProbe.JadxFound(), Browser: LocalToolProbe.BrowserName()), ct);
 
         NodeInfo? node = null;
@@ -35,9 +41,14 @@ public static class ToolCheckService
             }
         }
 
+        if (engines.GhidraDir is not null
+            && providers?.ProviderCandidates.FirstOrDefault(c => string.Equals(c.Id, "ghidra", StringComparison.OrdinalIgnoreCase)) is { } g
+            && !string.Equals(g.Status, "available", StringComparison.OrdinalIgnoreCase))
+            AppPaths.Log($"REA did not accept Ghidra at {engines.GhidraDir} ({engines.GhidraSource}, JAVA_HOME={engines.JavaHome ?? "-"}): {g.Status} {g.Reason}");
+
         var java = await javaTask.ConfigureAwait(false);
         var local = await localTask.ConfigureAwait(false);
-        return ToolStatusMapper.Map(new ToolProbeInputs(node, true, doctor, providers, failure, java, local.Jadx, local.Browser));
+        return ToolStatusMapper.Map(new ToolProbeInputs(node, true, doctor, providers, failure, java, local.Jadx, local.Browser, engines));
     }
 
     private static async Task<int?> SafeAsync(Func<Task<int?>> f)

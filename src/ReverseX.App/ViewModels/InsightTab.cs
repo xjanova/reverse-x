@@ -1,6 +1,7 @@
 using System.Data;
 using System.Globalization;
 using ReverseX.App.Services;
+using ReverseX.Core;
 
 namespace ReverseX.App.ViewModels;
 
@@ -15,6 +16,12 @@ public sealed class InsightTab : ObservableObject
 
     private readonly IReadOnlyList<object?[]> _rows;
     private readonly Func<int, string>? _detail;
+    private readonly Func<int, IProgress<string>, CancellationToken, Task<(string Text, string Note)>>? _code;
+    private readonly string _codeHint = "";
+    private CancellationTokenSource? _codeCts;
+    private int _codeRun;
+    private bool _detailBusy;
+    private string _detailNote = "";
     private readonly Type[] _types;
     private string _search = "";
     private DataView? _view;
@@ -34,6 +41,19 @@ public sealed class InsightTab : ObservableObject
         Rebuild();
     }
 
+    /// <summary>
+    /// A table whose selected row opens code fetched in the background (e.g. an APK class as Java). <paramref name="code"/> turns its own
+    /// failures into text; a newer selection cancels the older one, whose result is then ignored.
+    /// </summary>
+    public InsightTab(string key, string[] columns, IReadOnlyList<object?[]> rows,
+        Func<int, IProgress<string>, CancellationToken, Task<(string Text, string Note)>> code, string hint)
+        : this(key, columns, rows)
+    {
+        _code = code;
+        _codeHint = hint;
+        DetailNote = hint;
+    }
+
     public InsightTab(string key, string text)
     {
         Key = key;
@@ -51,7 +71,11 @@ public sealed class InsightTab : ObservableObject
     public string? Text { get; }
     public bool IsTable => Text is null;
     public bool IsText => Text is not null;
-    public bool HasDetail => _detail is not null;
+    public bool HasDetail => _detail is not null || _code is not null;
+    /// <summary>The selected row opens code beside the list (with a note line and a busy bar) instead of in the small box below it.</summary>
+    public bool IsCode => _code is not null;
+    public bool DetailBusy { get => _detailBusy; private set => Set(ref _detailBusy, value); }
+    public string DetailNote { get => _detailNote; private set => Set(ref _detailNote, value); }
 
     public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
     public DataView? View { get => _view; private set => Set(ref _view, value); }
@@ -70,9 +94,49 @@ public sealed class InsightTab : ObservableObject
         set
         {
             if (!Set(ref _selectedRow, value)) return;
+            if (_code is not null) { _ = LoadCodeAsync(value as DataRowView); return; }
             DetailText = value is DataRowView rv && _detail is not null ? _detail((int)rv[IndexColumn]) : "";
         }
     }
+
+    private async Task LoadCodeAsync(DataRowView? row)
+    {
+        _codeCts?.Cancel();
+        var id = ++_codeRun;
+        if (row is null || _code is null)
+        {
+            DetailText = "";
+            DetailNote = _codeHint;
+            DetailBusy = false;
+            return;
+        }
+        var cts = _codeCts = new CancellationTokenSource();
+        DetailText = "";
+        DetailBusy = true;
+        var progress = new Progress<string>(note => { if (id == _codeRun) DetailNote = note; });
+        try
+        {
+            var (text, note) = await _code((int)row[IndexColumn], progress, cts.Token).ConfigureAwait(true);
+            if (id != _codeRun) return;
+            DetailText = text;
+            DetailNote = note;
+        }
+        catch (OperationCanceledException) { /* a newer row was picked */ }
+        catch (Exception ex)
+        {
+            AppPaths.Log("Code view failed: " + Key, ex);
+            if (id == _codeRun) { DetailText = ""; DetailNote = Loc.Get("Code.Err.Failed"); }
+        }
+        finally
+        {
+            if (id == _codeRun) DetailBusy = false;
+            if (ReferenceEquals(_codeCts, cts)) _codeCts = null;
+            cts.Dispose();
+        }
+    }
+
+    /// <summary>The page dropped this tab (new file, language change): stop its background fetch.</summary>
+    public void Cancel() => _codeCts?.Cancel();
 
     public string HeaderFor(string columnName) =>
         columnName.Length > 1 && columnName[0] == 'c' && int.TryParse(columnName.AsSpan(1), out var i) && i < Columns.Length ? Columns[i] : columnName;

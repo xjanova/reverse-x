@@ -32,11 +32,17 @@ public sealed class AiAgent
         _emit = emit;
     }
 
-    public static string SystemPrompt(AgentOptions o) =>
+    /// <param name="dotnetCode">The local .NET tools are offered: tell the model to read the code with them first.</param>
+    public static string SystemPrompt(AgentOptions o, bool dotnetCode = false) =>
         "คุณคือผู้ช่วยวิเคราะห์ซอฟต์แวร์ของโปรแกรม Reverse X ตอบเป็นภาษาไทยที่อ่านง่าย (ชื่อฟังก์ชัน/ไฟล์/โค้ดเป็นภาษาอังกฤษตามเดิม)\n" +
         "เป้าหมายที่เปิดอยู่: " + (o.TargetDescription.Length > 0 ? o.TargetDescription : "(ยังไม่ได้เปิดโปรเจกต์)") + "\n\n" +
         "กติกา:\n" +
         "1. สืบด้วยเครื่องมือ REA ที่ให้มา (อ่านอย่างเดียว) อย่าเดา ถ้าไม่มีหลักฐานให้บอกว่าไม่รู้\n" +
+        (dotnetCode
+            ? "   เป้าหมายนี้เป็น .NET: อ่านโค้ดด้วยเครื่องมือในเครื่องก่อน — list_dotnet_members (ใส่ filter ได้) เพื่อหา type/method พร้อม token " +
+              "แล้วใช้ decompile_dotnet ดูโค้ด C# ของ type หรือ method นั้น (location ของหลักฐานให้ใช้ Namespace.Type.Method); " +
+              "REA มักไม่ยอมแสดง member ของ assembly ขนาดกลางขึ้นไป จึงใช้เครื่องมือ REA ของ .NET เฉพาะเรื่องที่เครื่องมือในเครื่องไม่มี เช่น P/Invoke, resource หรือกราฟของแอป\n"
+            : "") +
         "2. ทุกข้อเท็จจริงที่สำคัญให้บันทึกด้วย record_finding: kind=evidence พร้อม level=seen เฉพาะสิ่งที่ผลเครื่องมือแสดงตรงๆ, level=inferred สำหรับสิ่งที่อนุมาน, " +
         "location เป็นไฟล์:บรรทัดหรือที่อยู่; kind=path สำหรับเส้นทางการไหลของข้อมูล (steps เรียงจากต้นทางไปปลายทาง); kind=unknown สำหรับสิ่งที่ยังไม่รู้\n" +
         "3. ผลลัพธ์ที่ถูกย่อจะมี result_id ท้ายข้อความ — ใช้ get_result_page อ่านหน้าอื่นเฉพาะเมื่อจำเป็น เพื่อประหยัดค่าใช้จ่าย\n" +
@@ -50,7 +56,7 @@ public sealed class AiAgent
     public async Task<AgentResult> RunAsync(IReadOnlyList<AiMessage> history, string question, AgentOptions opt, CancellationToken ct)
     {
         var model = AiProviders.PricingFor(opt.ModelId);
-        var system = SystemPrompt(opt);
+        var system = SystemPrompt(opt, _tools.HasDotNetCode);
         var defs = _tools.Definitions();
         var work = new List<AiMessage>(history) { AiMessage.User(question) };
         decimal cost = 0;
@@ -195,7 +201,12 @@ public static class ToolTitles
         [AgentToolbox.ListProjectFiles] = "ดูไฟล์ในโปรเจกต์ของเรา",
         [AgentToolbox.ReadProjectFile] = "อ่านไฟล์ในโปรเจกต์ของเรา",
         [AgentToolbox.ProposeChange] = "เสนอโค้ดสำหรับโปรเจกต์ของเรา",
+        [AgentToolbox.ListDotNetMembers] = "ดูรายการ type และ method (อ่านในเครื่อง)",
+        [AgentToolbox.DecompileDotNet] = "ถอดโค้ด .NET เป็น C#",
     };
+
+    /// <summary>Tools with a heading; the app has an "Ai.Tool.&lt;name&gt;" string for each (Thai and English).</summary>
+    public static IEnumerable<string> Known => Map.Keys;
 
     public static string Title(string tool) => Map.TryGetValue(tool, out var t) ? t : tool.Replace('_', ' ');
 

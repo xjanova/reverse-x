@@ -58,7 +58,6 @@ internal static class ScreenshotMode
         try { File.Delete(tmp); } catch (IOException) { }
     }
 
-    /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe].</summary>
     /// <summary>--phase8 &lt;files…&gt;: opens each file (APK / SQLite / HAR / WASM / .NET) and shoots the Insight pages and the Evidence page.</summary>
     public static async Task RunPhase8Async(string dir, string[] files)
     {
@@ -106,6 +105,7 @@ internal static class ScreenshotMode
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 
+    /// <summary>Real REA analyses of the given files, rendered in both themes. files = [.NET dll, asar/app folder, native exe, apk]; "-" skips one.</summary>
     public static async Task RunPhase4Async(string dir, string[] files)
     {
         Directory.CreateDirectory(dir);
@@ -139,31 +139,83 @@ internal static class ScreenshotMode
             ThemeManager.Apply(UiPrefs.Night, save: false);
         }
 
+        // the tools card with the engine install offer (real probes of this machine)
+        await vm.Home.CheckToolsAsync(); await Flush(); Shoot("home", "-tools");
+        if (Environment.GetEnvironmentVariable("REVERSEX_SHOT_INSTALL") == "1" && vm.Engines.HasMissing)
+        {
+            // real install of what is missing (into REVERSEX_DATA_DIR), then the same reset + re-check the button runs
+            var install = vm.Engines.InstallAsync();
+            await Task.Delay(1500); await Flush(); Shoot("home", "-installing");
+            await install; await Flush(); Shoot("home", "-installed");
+        }
+
         // empty pages first
         vm.Select("Binary"); await Flush(); Shoot("binary", "-empty");
         vm.Select("Js"); await Flush(); Shoot("js", "-empty");
 
-        if (files.Length > 0)
+        // the code pane loads after the page is Ready (C# decompile, or Ghidra's first whole-file analysis for native), the native refs after it
+        async Task WaitCode(TimeSpan max)
+        {
+            await Flush();
+            var until = DateTime.UtcNow + max;
+            while ((vm.Binary.CodeBusy || vm.Binary.RefsBusy) && DateTime.UtcNow < until) await Task.Delay(300);
+            await Flush();
+        }
+
+        if (files.Length > 0 && files[0] != "-")
         {
             await vm.OpenEntryAsync(files[0], FileKindDetector.Detect(files[0]).Kind);
             await WaitReady(vm.Binary);
-            await Flush(); Shoot("binary-dotnet");
+            await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-dotnet");
+            vm.Binary.ScopeType = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-dotnet", "-class");
+            vm.Binary.ScopeType = false;
+            vm.Binary.Tab = BinTab.Cil; await Flush(); Shoot("binary-dotnet", "-cil");
             vm.Binary.Tab = BinTab.Meta; await Flush(); Shoot("binary-dotnet", "-meta");
-            vm.Binary.Tab = BinTab.Cil;
+            vm.Binary.Tab = BinTab.Code;
         }
-        if (files.Length > 1)
+        if (files.Length > 1 && files[1] != "-")
         {
             await vm.OpenEntryAsync(files[1], FileKindDetector.Detect(files[1]).Kind);
             await WaitReady(vm.Js);
             await Flush(); Shoot("js");
         }
-        if (files.Length > 2)
+        if (files.Length > 2 && files[2] != "-")
         {
             await vm.OpenEntryAsync(files[2], FileKindDetector.Detect(files[2]).Kind);
             await WaitReady(vm.Binary);
-            await Flush(); Shoot("binary-native");
+            await WaitCode(TimeSpan.FromMinutes(10)); Shoot("binary-native");
+            if (vm.Binary.ShowSymbolPanes)
+            {
+                vm.Binary.ViewAsm = true; await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-asm");
+                vm.Binary.ViewAsm = false; await WaitCode(TimeSpan.FromMinutes(2));
+                // follow the first function the selected one calls, as a click on the refs card does
+                if (vm.Binary.Refs.FirstOrDefault(r => r.CanOpen && r.Kind == BinaryViewModel.CalleeMark) is { } callee)
+                {
+                    vm.Binary.OpenRefCommand.Execute(callee);
+                    await WaitCode(TimeSpan.FromMinutes(2)); Shoot("binary-native", "-ref");
+                }
+            }
+        }
+        if (files.Length > 3 && files[3] != "-")
+        {
+            // APK → Java: the class list is local; picking MainActivity (or the first class) asks JADX through REA
+            await vm.OpenEntryAsync(files[3], FileKindDetector.Detect(files[3]).Kind);
+            await WaitReady(vm.Android);
+            vm.Select("Android");
+            if (vm.Android.Tabs.FirstOrDefault(t => t.Key == "Classes") is { } classes)
+            {
+                vm.Android.Tab = classes;
+                await Flush(); Shoot("android", "-classes");
+                var rows = classes.View?.Cast<System.Data.DataRowView>().ToList() ?? new List<System.Data.DataRowView>();
+                classes.SelectedRow = rows.FirstOrDefault(r => r["c0"] is string c && c.EndsWith(".MainActivity", StringComparison.Ordinal)) ?? rows.FirstOrDefault();
+                var until = DateTime.UtcNow.AddMinutes(5);
+                await Flush();
+                while (classes.DetailBusy && DateTime.UtcNow < until) await Task.Delay(300);
+                await Flush(); Shoot("android", "-java");
+            }
         }
         win.Close();
+        await vm.ShutdownAsync();
         try { Directory.Delete(tmpRoot, true); } catch (IOException) { }
     }
 

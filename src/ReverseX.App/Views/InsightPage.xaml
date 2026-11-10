@@ -58,8 +58,9 @@
             </Grid.ColumnDefinitions>
             <StackPanel>
                 <TextBlock Style="{StaticResource T.H1}" Text="{Binding TargetName}" TextTrimming="CharacterEllipsis"/>
-                <TextBlock Style="{StaticResource T.Sub}" Margin="2,8,0,0" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}"
-                           Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}"/>
+                <Border Style="{StaticResource PageSubPlate}">
+                    <TextBlock Style="{StaticResource T.PageSub}" Text="{Binding Subtitle}" ToolTip="{Binding Subtitle}"/>
+                </Border>
                 <TextBlock Margin="2,2,0,0" FontSize="11" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource B.Text}" Effect="{DynamicResource E.Title}"
                            Text="{Binding StatusLine}" ToolTip="{Binding StatusLine}"/>
             </StackPanel>
@@ -167,22 +168,58 @@
                                          Text="{Binding Search, UpdateSourceTrigger=PropertyChanged, Delay=200}"/>
                             </Grid>
 
-                            <DataGrid x:Name="Table" Grid.Row="1" Margin="0,6,0,0" DataContext="{Binding Tab}" ItemsSource="{Binding View}"
-                                      SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
-                                      Visibility="{Binding IsTable, Converter={StaticResource B2V}, FallbackValue=Collapsed}"
-                                      AutoGenerateColumns="True" AutoGeneratingColumn="OnAutoGeneratingColumn"
-                                      IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
-                                      SelectionMode="Single" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None"
-                                      AlternationCount="2" Background="Transparent" BorderThickness="0" RowHeaderWidth="0"
-                                      FontSize="12" Foreground="{DynamicResource B.Text}"
-                                      EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
-                                      CellStyle="{StaticResource GridCell}" ColumnHeaderStyle="{StaticResource GridHeader}" RowStyle="{StaticResource GridRow}"/>
+                            <!-- a table; in a code tab (APK classes → Java) the list narrows on the left and the code opens on the right -->
+                            <Grid Grid.Row="1" Margin="0,6,0,0" DataContext="{Binding Tab}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <DataGrid x:Name="Table" ItemsSource="{Binding View}"
+                                          SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                                          Visibility="{Binding IsTable, Converter={StaticResource B2V}, FallbackValue=Collapsed}"
+                                          AutoGenerateColumns="True" AutoGeneratingColumn="OnAutoGeneratingColumn"
+                                          IsReadOnly="True" CanUserAddRows="False" CanUserDeleteRows="False" CanUserReorderColumns="False"
+                                          SelectionMode="Single" SelectionUnit="FullRow" HeadersVisibility="Column" GridLinesVisibility="None"
+                                          AlternationCount="2" Background="Transparent" BorderThickness="0" RowHeaderWidth="0"
+                                          FontSize="12" Foreground="{DynamicResource B.Text}"
+                                          EnableRowVirtualization="True" EnableColumnVirtualization="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                          CellStyle="{StaticResource GridCell}" ColumnHeaderStyle="{StaticResource GridHeader}" RowStyle="{StaticResource GridRow}">
+                                    <DataGrid.Style>
+                                        <Style TargetType="DataGrid">
+                                            <Setter Property="Grid.ColumnSpan" Value="2"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCode}" Value="True">
+                                                    <Setter Property="Grid.ColumnSpan" Value="1"/>
+                                                    <Setter Property="Width" Value="250"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataGrid.Style>
+                                </DataGrid>
 
-                            <TextBox Grid.Row="1" Margin="0,6,0,0" DataContext="{Binding Tab}" Text="{Binding Text, Mode=OneWay}" IsReadOnly="True"
-                                     Visibility="{Binding IsText, Converter={StaticResource B2V}, FallbackValue=Collapsed}"
-                                     FontFamily="{StaticResource F.Mono}" FontSize="12" Background="{DynamicResource B.Input}" Foreground="{DynamicResource B.Text}"
-                                     BorderBrush="{DynamicResource B.InputLine}" Padding="8" TextWrapping="NoWrap"
-                                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                                <TextBox Grid.ColumnSpan="2" Text="{Binding Text, Mode=OneWay}" IsReadOnly="True"
+                                         Visibility="{Binding IsText, Converter={StaticResource B2V}, FallbackValue=Collapsed}"
+                                         FontFamily="{StaticResource F.Mono}" FontSize="12" Background="{DynamicResource B.Input}" Foreground="{DynamicResource B.Text}"
+                                         BorderBrush="{DynamicResource B.InputLine}" Padding="8" TextWrapping="NoWrap"
+                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+
+                                <DockPanel Grid.Column="1" Margin="12,0,0,0" Visibility="{Binding IsCode, Converter={StaticResource B2V}, FallbackValue=Collapsed}">
+                                    <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <ProgressBar Width="70" Height="6" IsIndeterminate="True" Margin="0,0,8,0" VerticalAlignment="Center"
+                                                     Visibility="{Binding DetailBusy, Converter={StaticResource B2V}}"/>
+                                        <TextBlock Grid.Column="1" FontSize="11.5" Foreground="{DynamicResource B.Text2}" TextWrapping="Wrap" VerticalAlignment="Center"
+                                                   Text="{Binding DetailNote}"/>
+                                    </Grid>
+                                    <TextBox Text="{Binding DetailText, Mode=OneWay}" IsReadOnly="True"
+                                             FontFamily="{StaticResource F.Mono}" FontSize="11.5" Background="{DynamicResource B.Input}" Foreground="{DynamicResource B.Text}"
+                                             BorderBrush="{DynamicResource B.InputLine}" Padding="8" TextWrapping="NoWrap"
+                                             VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"/>
+                                </DockPanel>
+                            </Grid>
 
                             <TextBlock Grid.Row="2" Margin="2,6,0,0" FontSize="11" Foreground="{DynamicResource B.Text3}" TextWrapping="Wrap"
                                        DataContext="{Binding Tab}" Text="{Binding Note}"/>
@@ -199,6 +236,7 @@
                                                 <MultiDataTrigger.Conditions>
                                                     <Condition Binding="{Binding HasDetail}" Value="True"/>
                                                     <Condition Binding="{Binding IsTable}" Value="True"/>
+                                                    <Condition Binding="{Binding IsCode}" Value="False"/>
                                                 </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </MultiDataTrigger>

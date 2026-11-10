@@ -303,3 +303,131 @@
 ### กติกาต่อจากนี้
 - ก่อนจะเขียนว่า "0 warning" ต้องตรวจด้วย `dotnet build ReverseX.slnx --no-incremental` ทุกครั้ง
 - build แบบ incremental ไม่คอมไพล์โปรเจกต์ที่ไม่เปลี่ยนซ้ำ warning ของโปรเจกต์นั้นจึงไม่แสดง
+
+---
+
+## ติดตั้ง engine ให้ REA (ส่วน Core): Ghidra 12.1.4, JDK 21, JADX MCP JAR
+
+### ทำไม
+- REA ถอด PE x86/x64 เป็น pseudo-C ได้ก็ต่อเมื่อมี Ghidra 12.1.x (`GHIDRA_INSTALL_DIR`) กับ JDK 21 ส่วน Android ต้องมี `REA_JADX_MCP_JAR` กับ JDK 17 ขึ้นไป
+- ผู้ใช้ทั่วไปไม่มีสักอย่าง และแอปไม่เคยส่งตัวแปรเหล่านี้ให้ REA
+
+### ทำอะไร
+- `Core/Engines/EngineCatalog`: ปักหมุด 3 ตัว คือ Ghidra 12.1.4, Temurin JDK 21.0.13+9 และ jadx-headless-mcp 0.7.1 (ตรงกับที่ REA 6.4.0 pin ไว้ใน `JadxRelease.js`)
+  - แต่ละตัวมี url, ขนาด, sha256, ชื่อโฟลเดอร์, ไฟล์ probe และบอกว่าเป็น ZIP หรือไฟล์เดี่ยว
+- `EngineLocator`: เลือกว่าจะให้ REA ใช้ตัวไหน
+  - Ghidra: ของผู้ใช้ถ้าเป็น 12.1.x ไม่อย่างนั้นใช้ของแอป
+  - JDK: ของแอปก่อน ไม่อย่างนั้นใช้ `JAVA_HOME` ที่ไฟล์ `release` บอกว่าเป็น 21 ขึ้นไป
+  - JAR: ของผู้ใช้ถ้าไฟล์มีอยู่จริง ไม่อย่างนั้นใช้ของแอป
+  - คืน env map: `GHIDRA_INSTALL_DIR`, `JAVA_HOME`, `PATH` (เติม `<jdk>\bin` ไว้หน้าสุด) และ `REA_JADX_MCP_JAR` ไม่ลบค่าใดที่ผู้ใช้ตั้งไว้
+- `EngineInstaller`: ทำตามลำดับนี้
+  - เช็คพื้นที่ดิสก์ก่อน (ZIP ใช้ 4 เท่าของขนาด ไฟล์เดี่ยวใช้ 1 เท่า)
+  - โหลดลง `engines\.download\*.part` และคำนวณ SHA-256 ไประหว่างเขียน แล้วตรวจขนาดกับ hash
+  - แกะลง `.staging-<guid>` โดยตรวจ path ของทุก entry ก่อนเขียนอะไรเลย (กัน `..`, path แบบ absolute, drive letter และ `:` ของ ADS)
+  - ตรวจไฟล์ probe แล้ว rename เข้าที่ในครั้งเดียว เขียน `<folder>.installed.json`
+  - ถ้าล้มหรือถูกยกเลิก จะลบ `.part` และ staging ทิ้ง ของเดิมที่ใช้ได้อยู่ไม่ถูกแตะ
+  - มี lock file กันการติดตั้งซ้อนกัน (`Busy`) ถ้าเจอโฟลเดอร์เสียจะติดตั้งทับเฉพาะโฟลเดอร์นั้น
+- `ReaLauncher.Create`: ใส่ env map ทุกครั้งที่เปิด REA (ทั้ง MCP และ CLI) ก่อน `NO_COLOR`
+- `ToolCheckService` / `ToolStatusMapper`: แถว Ghidra/JADX คิดจาก JDK ตัวเดียวกับที่ส่งให้ REA เพิ่มรหัส `ghidra.rejected` และ `jadx.noJdk`
+
+### ผล
+- `EngineTests` 56 เทสต์ ใช้ ZIP ที่สร้างในหน่วยความจำกับ handler ปลอม ไม่โหลดไฟล์จริง
+- ตรวจกับไฟล์จริงที่โหลดไว้ในเครื่องแล้ว (เสิร์ฟจากดิสก์ผ่าน handler ปลอม เทสต์นี้ไม่ได้ commit):
+  - ติดตั้งครบ 3 ตัวใน 15 วินาที hash, ขนาด และชื่อโฟลเดอร์ตรงทั้งหมด
+  - แถวขึ้น `ghidra.ok` และ `jadx.ok` แม้ `JAVA_HOME` ของเครื่องจะเป็น JDK 17
+  - `open_binary` + `procedure_pseudo_code` ได้ผลจาก Ghidra 12.1.4 และรันติดตั้งซ้ำใช้ 0 ms
+- path ยาว: Ghidra มี 5,219 ไฟล์ path ยาวสุด 128 ตัวอักษร (นับจากโฟลเดอร์ Ghidra) ใต้ `%LOCALAPPDATA%\ReverseX\engines\` รวมแล้วราว 190 ตัว (ตอนอยู่ใน staging เพิ่มอีก 42)
+  - .NET 8 จัดการ path ที่เกิน 260 ได้เองอยู่แล้ว ที่ยังเสี่ยงคือชื่อผู้ใช้ที่ยาวมาก หรือ `REVERSEX_DATA_DIR` ที่อยู่ลึก
+
+### ข้อจำกัดที่ยังเหลือ
+- ปุ่มและข้อความใน UI ยังไม่ได้ทำ (lead ทำแยก) ต้องเพิ่ม `S.Tool.Msg.ghidra.rejected` และ `S.Tool.Msg.jadx.noJdk` ทั้งไทยและอังกฤษ
+- ยังไม่ได้ลอง JADX กับ APK จริง
+- locator ไม่ hash ไฟล์ใหม่ทุกครั้งที่เปิด REA ตรวจแค่ไฟล์ probe
+
+---
+
+## แกะโค้ดได้จริง: C# / pseudo-C / assembly / Java และปุ่มติดตั้ง engine
+
+### ทำไม
+- หน้า Binary เดิมแสดงแค่รายชื่อ method, จุดยึด CIL และสรุปฟังก์ชัน ยังไม่มีโค้ดให้อ่านจริงสักภาษา
+- หน้า Android อ่าน APK เองได้ แต่ยังไม่มีโค้ด Java
+- เครื่องทั่วไปไม่มี Ghidra / JDK 21 / JADX MCP และแอปยังไม่มีปุ่มติดตั้ง
+
+### ทำอะไร
+- **.NET → C#** (`Core/Decompile/DotNetDecompiler`, ใช้ ICSharpCode.Decompiler 11.2 ซึ่งเป็น engine ของ ILSpy, MIT)
+  - แท็บ C# เป็นแท็บแรกของไฟล์ .NET: ดูเฉพาะ method ที่เลือก หรือทั้งคลาสก็ได้ มีปุ่มคัดลอก
+  - "ส่งออกเป็นโปรเจกต์ C#": เขียนทั้ง assembly ลงโฟลเดอร์ใหม่ `<ชื่อ>-decompiled` (ถ้ามีแล้วจะต่อท้าย ` (2)`)
+    - ไม่ยอมเขียนลงโฟลเดอร์ที่มีไฟล์อยู่แล้ว ถ้ากดหยุดจะลบเฉพาะโฟลเดอร์ที่สร้างเองในรอบนั้น
+  - อ่านไฟล์เข้าหน่วยความจำทั้งก้อน จึงไม่ล็อกไฟล์ และจำกัดข้อความไว้ที่ 2 ล้านตัวอักษร
+- **บั๊กที่เจอตอนรันแอปจริง**: REA ไม่ยอมอ่านสมาชิกของ assembly ขนาดกลาง ("CLI metadata could not be admitted") ทั้งหน้า .NET จึงล้ม
+  - แก้ด้วย `ManagedListing` ที่อ่านรายชื่อ type/method พร้อม token และ signature จาก metadata ในเครื่องเอง ใช้ตอนที่ REA อ่านไม่ได้ ไม่มี Node หรือ REA ล่ม
+  - ทำให้ C# ใช้ได้เสมอ ส่วนหน้าแอปบอกตรง ๆ ว่ากรณีนี้ไม่มีจุดยึด CIL จาก REA
+- **native → pseudo-C / assembly**: ใช้ Ghidra 12.1.4 ผ่าน REA บน session ที่เปิดค้างไว้ต่อไฟล์ (`TargetSessionCache`)
+  - ไฟล์จึงถูก import และ auto-analysis แค่ครั้งเดียว
+  - ฟังก์ชัน import อยู่ท้ายรายการและไม่ถูกส่งไปถอด
+  - การคลิกใหม่ไม่ยกเลิกคำขอเดิม เพราะ REA จะทิ้งฐานวิเคราะห์ของ Ghidra ถ้าโดนยกเลิก ใช้วิธีไม่สนผลที่มาช้าแทน
+  - session ที่พัง (timeout, process ตาย) ถูกทิ้งแล้วเปิดใหม่ และตอนปิดแอปจะปิด process ให้ทั้งหมด
+- **APK → Java** (JADX headless MCP 0.7.1 ผ่าน REA, session ค้างต่อ APK)
+  - เลือกคลาสในแท็บ "คลาส" แล้วโค้ดขึ้นทางขวา เรียงเป็น package, ฟิลด์ แล้วตามด้วย body ของแต่ละ method ตามลำดับของ JADX (สูงสุด 80 method)
+  - นับ method ที่ JADX ต้องแสดงเป็น smali และ method ที่ไม่มี body แยกไว้
+  - ไม่มีบรรทัดประกาศคลาส เพราะ JADX MCP ไม่บอก modifier และคลาสแม่ หน้าแอปบอกเรื่องนี้ไว้
+  - ชื่อ inner class จาก DEX ใช้ `$` ถ้า JADX ไม่รู้จักจะลองสะกดด้วย `.` อีกครั้ง
+  - การยกเลิกเกิดเฉพาะระหว่าง method ไม่ยกเลิกคำขอที่ REA ทำอยู่ จึงไม่ทำให้ต้องโหลด APK ใหม่
+- **ปุ่มติดตั้ง engine** (`EngineSetupViewModel` + `EngineSetupStrip`): มีทั้งบนการ์ดเครื่องมือหน้าแรก และบนการ์ด "ไม่มี engine" ของหน้า Binary
+  - บอกขนาดดาวน์โหลดและพื้นที่ที่ต้องใช้ แสดงความคืบหน้า มีปุ่มหยุด และแปลงผลออกมาเป็นข้อความไทย/อังกฤษ
+  - ติดตั้งเสร็จแล้วจะรีเซ็ต REA ที่ค้างอยู่ (process เก่าไม่เห็น engine ใหม่) ตรวจเครื่องมือใหม่ และให้หน้า native ที่ขึ้นว่าไม่มี engine วิเคราะห์ใหม่
+- **ELF / Mach-O บน Windows**: REA ฝั่ง Windows ส่งให้ Ghidra ได้เฉพาะ PE หน้าแอปจึงบอกว่าต้องใช้ REA บน Linux หรือ macOS และไม่เสนอปุ่มติดตั้งที่ติดตั้งไปก็ไม่ช่วย
+- แถว JADX: ถ้าเจอแค่ jadx CLI แต่ไม่มี JAR ของ MCP จะเป็น "ควรแก้" ไม่ขึ้นว่าพร้อมแล้ว (REA 6.4 ใช้ CLI ไม่ได้)
+
+### ผล
+- `dotnet build ReverseX.slnx --no-incremental`: 0 warning 0 error
+- `REVERSEX_SKIP_REA=1 dotnet test`: ผ่าน 325 ข้าม 14
+  - เทสต์ใหม่ใช้ผลจริงของ Ghidra 12.1.4 และ JADX 0.7.1 ที่ตัดให้สั้นลง และเปลี่ยนชื่อ package กับ path ให้เป็นกลางแล้ว (repo เป็น public)
+- รันแอปจริงในโหมดภาพหน้าจอ (`--screenshots <dir> --phase4 <dll> <asar|-> <exe> <apk>`) บนเครื่องนี้:
+  - `ReverseX.Core.dll`: ได้ C# ทั้งระดับ method และทั้งคลาส (รายชื่อสมาชิกมาจาก metadata ในเครื่อง เพราะ REA อ่าน assembly นี้ไม่ได้)
+  - `ReverseX.exe` (apphost): ได้ 572 ฟังก์ชัน และ `entry` ขึ้นทั้ง pseudo-C และ assembly จาก Ghidra 12.1.4
+  - APK จริง (1,202 คลาส): ได้ Java ของ `MainActivity` จาก JADX
+  - `REVERSEX_SHOT_INSTALL=1`: กดติดตั้งจริงในโฟลเดอร์ข้อมูลชั่วคราว ได้ JADX MCP (42 MB, ตรวจ SHA-256) แล้วแถว JADX เปลี่ยนเป็น "พร้อม" และถอด APK ด้วย JAR ที่แอปติดตั้งเองได้
+  - ไฟล์ `.so` (ELF) ที่ดึงออกจาก APK: ขึ้นข้อความว่าต้องใช้ Linux/macOS ตรงกับเหตุผลที่ REA ตอบมา ("Windows Ghidra P0 accepts PE targets only")
+
+### แก้หลังรีวิว diff ทั้งชุด
+- "วิเคราะห์ใหม่" ของไฟล์เดิมเคยยกเลิกคำขอ Ghidra ที่ค้างอยู่ ซึ่งทำให้ REA ทิ้งผลวิเคราะห์ทั้งไฟล์ ตอนนี้ token ของ native จะถูกยกเลิกเฉพาะตอนเปลี่ยนไฟล์
+- ปิดแอประหว่างที่ Ghidra วิเคราะห์ครั้งแรก: เดิม `DisposeAsync` รอให้คำขอที่ค้างอยู่เสร็จก่อน แต่แอปให้เวลาแค่ 5 วินาที จึงอาจทิ้ง process ค้างไว้
+  - ตอนนี้ปิด process ทันที (ทั้ง native และ Android พร้อมกัน) และไม่ให้เปิด session ใหม่หลังปิดแล้ว
+  - เพิ่มเทสต์ไว้แล้ว
+  - รันจริงแล้วไม่เหลือ java ค้างหลังปิดแอป
+- หน้า Binary เปลี่ยนจากไฟล์ native ไปเป็น .NET: ปิด Ghidra ของไฟล์เก่าเพื่อคืนหน่วยความจำ
+- dispose `CancellationTokenSource` ตัวเก่าทุกครั้งที่สร้างตัวใหม่ และอ่าน token เก็บไว้ก่อน จะได้ไม่เจอ `ObjectDisposedException` ใน task ที่ช้า
+- บรรทัด `package` ของ inner class เอามาจากชื่อใน DEX (`Outer$Inner`) ไม่ใช่ชื่อแบบ `pkg.Outer.Inner` ของ JADX
+- zip-slip: ไม่รับ segment ที่ลงท้ายด้วยจุดหรือช่องว่าง (Windows ตัดทิ้งให้เอง จนได้ `..` กลับมา) และไม่รับ segment ว่าง
+  - ลองกับ ZIP จริงแล้ว: Ghidra 6,695 entry และ JDK 577 entry ไม่โดนปฏิเสธเลยสักตัว
+- getter / setter / add / remove ถอดเป็น property หรือ event ทั้งตัว ไม่ได้เป็นแค่ `{ … }` ลอย ๆ อีกต่อไป
+- รายการ .NET เปิดที่เมธอดแรกของผู้เขียน (เช่น `AppPaths.get_Root`) ไม่ได้เปิดที่ `.ctor` ของ regex ที่คอมไพเลอร์สร้าง
+- ผล: build 0 warning, `dotnet test` รวม REA จริงผ่าน 342 ข้าม 2 แล้วรันแอปจริงซ้ำกับ dll, exe และ apk ได้ครบทุกภาพ
+
+### ข้อจำกัดที่ยังเหลือ
+- ELF / Mach-O ยังถอดบน Windows ไม่ได้ ทางที่คิดไว้คือส่งไปรันบน runner Linux ของ GitHub Actions ใน repo private แยกต่างหาก (ยังไม่ได้ทำ รอเจ้าของตัดสินใจ)
+- ยังไม่ได้ติดตั้ง Ghidra (543 MB) ผ่านปุ่มของแอปจริง ทดสอบจริงแค่ JADX ส่วน Ghidra กับ JDK ตรวจผ่าน installer ใน Core มาแล้ว
+- ช่องการอ้างอิงของฟังก์ชัน native ยังว่างอยู่ ตอนนี้ให้ดูการเรียกจากในโค้ด C จำลองไปก่อน
+- เครื่องมือ AI ยังไม่มีคำสั่ง "ถอด .NET เป็น C#" ของตัวเอง
+
+## เปลี่ยนกุญแจเซ็นอัปเดต (2026-11-10)
+
+### ทำไม
+- กุญแจส่วนตัวชุด 2026-10-16 หายไปจากเครื่อง: ไม่มี `%USERPROFILE%\.xman-signing\` แล้ว และยังไม่เคยตั้ง secret `REVERSEX_UPDATE_SIGNING_KEY` ใน repo ถ้าติด tag ตอนนั้น release.yml จะล้มที่ขั้น "Publish, sign and zip"
+- ยังไม่เคยออก release หรือ tag เลย จึงไม่มีเครื่องผู้ใช้ที่เชื่อกุญแจเก่า เจ้าของจึงเลือกสร้างคู่ใหม่แทนการตามหาไฟล์สำรอง
+
+### ทำอะไร
+- `ReleaseSigner keygen` สร้างคู่ ECDSA P-256 ใหม่ กุญแจส่วนตัวอยู่ที่ `%USERPROFILE%\.xman-signing\reversex-update-signing-key.txt` (ไม่อยู่ใน repo)
+- เปลี่ยน `UpdatePackageVerifier.ReleasePublicKey` เป็นกุญแจสาธารณะตัวใหม่ เทสต์อ่านค่าจาก const นี้ จึงไม่มีที่อื่นต้องแก้
+- ตั้ง secret `REVERSEX_UPDATE_SIGNING_KEY` ด้วย `gh secret set` โดยส่งค่าเข้าทาง stdin ไม่ได้ส่งเป็น argument
+- `ReleaseSigner sign-file` เซ็นไฟล์ทดสอบแล้วตรวจกับกุญแจที่ compile อยู่ในแอปผ่าน แปลว่าสองครึ่งเข้าคู่กัน
+- โฟลเดอร์ `.xman-signing` เดิมได้สิทธิ์ต่อมาจากโฟลเดอร์ผู้ใช้ ซึ่งให้ `CodexSandboxUsers` อ่านได้ด้วย จึงตัดสิทธิ์ที่ได้ต่อมาออก เหลือแค่ผู้ใช้, SYSTEM และ Administrators
+  - กับดัก: `icacls <folder> /grant:r "user:(OI)(CI)F" /T` เอา flag ของโฟลเดอร์ไปใส่ให้ไฟล์ด้วย ไฟล์เลยไม่เหลือสิทธิ์ของใครเลย ต้องตั้งสิทธิ์ของไฟล์แยกโดยไม่มี `(OI)(CI)` (เจ้าของไฟล์ยังแก้สิทธิ์ได้เสมอ)
+
+### ผล
+- `dotnet build ReverseX.slnx -c Release`: 0 warning 0 error
+- `REVERSEX_SKIP_REA=1 dotnet test -c Release`: ผ่าน 408 ข้าม 15
+- ซ้อมออกรุ่นในเครื่องแบบเดียวกับ CI: `deploy/publish.ps1 -Version 0.1.0 -RequireSignature` เซ็น 478 ไฟล์ ได้ zip 83.5 MB พร้อม `.sig` และ `.sha256`
+  - `UpdateTests` ทั้งชุดรวม `RealReleaseZip_*` ที่ใช้ zip นี้ผ่าน 25 ข้าม 0
+- ยังไม่ได้ push, merge หรือติด tag

@@ -4,6 +4,7 @@ using System.Windows.Input;
 using ReverseX.App.Services;
 using ReverseX.Core;
 using ReverseX.Core.Analysis;
+using ReverseX.Core.Decompile;
 using ReverseX.Core.Files;
 using ReverseX.Core.Rea;
 
@@ -15,41 +16,91 @@ public enum RunState { Idle, Running, Ready, Failed }
 public interface IAnalysisBackend
 {
     Task<AnalysisSnapshot> AnalyzeAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct);
-    Task<string> FunctionDossierAsync(string path, string procedure, CancellationToken ct);
+    /// <summary>Pseudo-C or disassembly of one native function; needs a deep engine (Ghidra) for this file.</summary>
+    Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct);
+    /// <summary>Callers and callees of one native function, on the same kept engine session as the code.</summary>
+    Task<NativeRefs> NativeRefsAsync(string path, string procedure, CancellationToken ct);
     Task<string> CallGraphAsync(string path, string address, CancellationToken ct);
+    /// <summary>One APK class as Java; needs the JADX MCP engine.</summary>
+    Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct);
 }
 
-public sealed class ReaAnalysisBackend : IAnalysisBackend
+public sealed class ReaAnalysisBackend : IAnalysisBackend, IAsyncDisposable
 {
+    // One REA process stays up for the native file on screen: Ghidra's import + auto-analysis then happens once for the listing
+    // and every function the user opens afterwards, instead of once per click.
+    private readonly TargetSessionCache _native = new(StartAsync, (rea, path, ct) => new AnalysisRunner(rea).OpenAsync(path, ct));
+    // Same for the APK on the Android page: JADX loads the whole APK on its first call in a process, then answers each class quickly.
+    private readonly TargetSessionCache _android = new(StartAsync);
+
     private static async Task<NodeInfo> NodeAsync(CancellationToken ct) =>
         await NodeProbe.FindAsync(ct).ConfigureAwait(false)
         ?? throw new AnalysisFailure(AnalysisFailureKind.NoNode, "node not found");
 
+    private static async Task<IReaSession> StartAsync(CancellationToken ct) => new ReaSession(await NodeAsync(ct).ConfigureAwait(false));
+
     public async Task<AnalysisSnapshot> AnalyzeAsync(string path, FileKind kind, IProgress<AnalysisProgress> progress, CancellationToken ct)
     {
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session, ReaSession.ManagedMembersViaCli(node));
-        return await runner.AnalyzeAsync(path, kind, progress, ct).ConfigureAwait(false);
+        if (kind is FileKind.Pe or FileKind.Elf or FileKind.MachO)
+            return await OnNativeAsync(path, (rea, c) => new AnalysisRunner(rea).AnalyzeAsync(path, kind, progress, c), ct).ConfigureAwait(false);
+
+        try
+        {
+            var node = await NodeAsync(ct).ConfigureAwait(false);
+            await using var session = new ReaSession(node);
+            var runner = new AnalysisRunner(session, ReaSession.ManagedMembersViaCli(node));
+            return await runner.AnalyzeAsync(path, kind, progress, ct).ConfigureAwait(false);
+        }
+        catch (AnalysisFailure ex) when (kind == FileKind.DotNet)
+        {
+            // REA could not list the members (budget, no Node, REA down): C# does not need REA, so list them from metadata here.
+            AppPaths.Log("REA could not list .NET members, using the local metadata list: " + path, ex);
+            try { return await Task.Run(() => AnalysisRunner.LocalDotNetSnapshot(path, ct), ct).ConfigureAwait(false); }
+            catch (DecompileFailure local)
+            {
+                AppPaths.Log("Local metadata list failed too: " + path, local);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw();
+                throw;
+            }
+        }
     }
 
-    public async Task<string> FunctionDossierAsync(string path, string procedure, CancellationToken ct)
+    public Task<NativeCode> NativeCodeAsync(string path, string procedure, NativeCodeView view, CancellationToken ct) =>
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).NativeCodeAsync(procedure, view, c), ct);
+
+    public Task<NativeRefs> NativeRefsAsync(string path, string procedure, CancellationToken ct) =>
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).NativeRefsAsync(procedure, c), ct);
+
+    public Task<string> CallGraphAsync(string path, string address, CancellationToken ct) =>
+        OnKeptAsync(_native, path, (rea, c) => new AnalysisRunner(rea).CallGraphAsync(address, c), ct);
+
+    public Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct) =>
+        OnKeptAsync(_android, apk, (rea, c) => new AnalysisRunner(rea).AndroidClassJavaAsync(apk, className, progress, c), ct);
+
+    private Task<T> OnNativeAsync<T>(string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct) =>
+        OnKeptAsync(_native, path, work, ct);
+
+    /// <summary>Runs on a kept session; process-level failures become the same AnalysisFailure kinds the pages already map.</summary>
+    private static async Task<T> OnKeptAsync<T>(TargetSessionCache cache, string path, Func<IReaToolCaller, CancellationToken, Task<T>> work, CancellationToken ct)
     {
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session);
-        await runner.OpenAsync(path, ct).ConfigureAwait(false);
-        return await runner.AnalyzeFunctionAsync(procedure, ct).ConfigureAwait(false);
+        try { return await cache.RunAsync(path, work, ct).ConfigureAwait(false); }
+        catch (TimeoutException ex) { throw new AnalysisFailure(AnalysisFailureKind.Timeout, ex.Message); }
+        catch (ReaException ex) { throw new AnalysisFailure(AnalysisFailureKind.ReaUnavailable, ex.Message); }
     }
 
-    public async Task<string> CallGraphAsync(string path, string address, CancellationToken ct)
+    /// <summary>A newer engine became available (installed from the app): the kept processes still run without it.</summary>
+    public async Task ResetSessionsAsync()
     {
-        var node = await NodeAsync(ct).ConfigureAwait(false);
-        await using var session = new ReaSession(node);
-        var runner = new AnalysisRunner(session);
-        await runner.OpenAsync(path, ct).ConfigureAwait(false);
-        return await runner.CallGraphAsync(address, ct).ConfigureAwait(false);
+        await _native.ResetAsync().ConfigureAwait(false);
+        await _android.ResetAsync().ConfigureAwait(false);
     }
+
+    /// <summary>Both kept processes end in parallel: each may need its few-second grace before it is killed.</summary>
+    public async ValueTask DisposeAsync() =>
+        await Task.WhenAll(_native.DisposeAsync().AsTask(), _android.DisposeAsync().AsTask()).ConfigureAwait(false);
+
+    /// <summary>The Binary page moved to a file that is not native: free the Ghidra process (and its memory) kept for the old one.</summary>
+    public Task ReleaseNativeAsync() => _native.ResetAsync();
 }
 
 /// <summary>Shared run logic: snapshot first, otherwise a cancellable background analysis with progress. Never throws to the UI.</summary>

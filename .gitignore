@@ -16,3 +16,4 @@ TestResults/
 *.key
 .xman-signing/
 small-test.png
+.claude/

@@ -20,6 +20,7 @@ public sealed class MainViewModel : ObservableObject
     {
         License = license ?? new LicenseViewModel(FixedLicenseSource.Pro(), new FixedUpdateSource(new ReverseX.Licensing.UpdateStatus { Current = AppVersion.Current }));
         backend ??= new ReaAnalysisBackend();
+        Backend = backend;
         ai ??= new AiServices();
         snapshots ??= new SnapshotStore();
         Nav = new[]
@@ -35,11 +36,12 @@ public sealed class MainViewModel : ObservableObject
             new NavItemViewModel("Evidence", "evidence.png"),
             new NavItemViewModel("Settings", "settings.png"),
         };
-        Home = new HomeViewModel(store, toolCheck);
+        Engines = new EngineSetupViewModel(AfterEnginesInstalledAsync);
+        Home = new HomeViewModel(store, toolCheck, engines: Engines);
         Home.OpenAiRequested += () => Select("Ai");
         _pages["Home"] = Home;
         foreach (var n in Nav.Skip(1)) _pages[n.Key] = new PlaceholderViewModel(n);
-        Binary = new BinaryViewModel(backend, snapshots, OpenPathAsync);
+        Binary = new BinaryViewModel(backend, snapshots, OpenPathAsync) { Engines = Engines };
         Js = new JsViewModel(backend, snapshots, OpenPathAsync);
         _pages["Binary"] = Binary;
         _pages["Js"] = Js;
@@ -78,6 +80,10 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public NavItemViewModel[] Nav { get; }
+    /// <summary>Owns the REA processes kept alive for the file on screen; ended by <see cref="ShutdownAsync"/>.</summary>
+    public IAnalysisBackend Backend { get; }
+    /// <summary>Ghidra / JDK / JADX installer shared by Home and the Binary page.</summary>
+    public EngineSetupViewModel Engines { get; }
     public HomeViewModel Home { get; }
     public BinaryViewModel Binary { get; }
     public JsViewModel Js { get; }
@@ -89,6 +95,21 @@ public sealed class MainViewModel : ObservableObject
     public AiViewModel Ai { get; }
     public SettingsViewModel Settings { get; }
     public LicenseViewModel License { get; }
+
+    /// <summary>App is closing: end the kept REA/Ghidra processes instead of leaving them to notice the closed pipe.</summary>
+    public async Task ShutdownAsync()
+    {
+        Engines.Cancel();
+        if (Backend is IAsyncDisposable live) await live.DisposeAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>A kept REA process was started without the new engine, and the tool rows and a native page still show it missing.</summary>
+    private async Task AfterEnginesInstalledAsync()
+    {
+        if (Backend is ReaAnalysisBackend rea) await rea.ResetSessionsAsync().ConfigureAwait(true);
+        await Home.CheckToolsAsync().ConfigureAwait(true);
+        if (Binary is { ShowNoEngine: true, NeedsOtherOs: false } && Binary.ReanalyzeCommand.CanExecute(null)) Binary.ReanalyzeCommand.Execute(null);
+    }
 
     /// <summary>Opens a path from a page's own picker: detects the kind, records it in recent projects, then shows the matching page.</summary>
     private async Task OpenPathAsync(string path)
@@ -105,6 +126,9 @@ public sealed class MainViewModel : ObservableObject
         switch (kind)
         {
             case FileKind.DotNet:
+                // The Binary page leaves a native file: its Ghidra process (often a GB or more) is no longer needed.
+                if (Backend is ReaAnalysisBackend rea && Binary.TargetKind is FileKind.Pe or FileKind.Elf or FileKind.MachO)
+                    _ = rea.ReleaseNativeAsync();
                 // The metadata view is read locally and is quick, so it is ready by the time the user opens the .NET page.
                 _ = Dotnet.OpenAsync(path, kind);
                 Select("Binary");

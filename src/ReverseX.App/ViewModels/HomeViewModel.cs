@@ -28,9 +28,11 @@ public sealed class HomeViewModel : ObservableObject
     private bool _fetching;
     private CancellationTokenSource? _fetchCts;
 
-    public HomeViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null, IApkFetcher? fetcher = null)
+    public HomeViewModel(ProjectStore store, Func<CancellationToken, Task<IReadOnlyList<ToolStatus>>>? toolCheck = null, IApkFetcher? fetcher = null,
+        EngineSetupViewModel? engines = null)
     {
         _store = store;
+        Engines = engines ?? new EngineSetupViewModel();
         _fetcher = fetcher ?? new ApkFetcher();
         FetchCommand = new RelayCommand(_ => { _ = FetchFromPlayAsync(); }, _ => !_fetching);
         CancelFetchCommand = new RelayCommand(_ => _fetchCts?.Cancel(), _ => _fetching);
@@ -51,6 +53,8 @@ public sealed class HomeViewModel : ObservableObject
 
     public ObservableCollection<ProjectItemViewModel> Projects { get; } = new();
     public ObservableCollection<ToolItemViewModel> Tools { get; } = new();
+    /// <summary>Install button for the engines REA is missing, shown above the tool rows.</summary>
+    public EngineSetupViewModel Engines { get; }
 
     public ICommand FetchCommand { get; }
     public ICommand CancelFetchCommand { get; }
@@ -263,6 +267,7 @@ public sealed class HomeViewModel : ObservableObject
         {
             var result = await Task.Run(() => _toolCheck(ct), ct).ConfigureAwait(true);
             ApplyTools(result);
+            await Engines.RefreshAsync().ConfigureAwait(true);
         }
         catch (OperationCanceledException) { /* a newer check replaced this one */ }
         catch (Exception ex)

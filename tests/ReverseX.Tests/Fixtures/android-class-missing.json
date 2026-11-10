@@ -1,0 +1,72 @@
+{
+ "error": {
+  "code": "invalid_request",
+  "category": "invalid_input",
+  "message": "Analysis input is invalid. Check the arguments and try again.",
+  "retryable": true,
+  "remediation": {
+   "action": "Correct the listed arguments and retry."
+  },
+  "details": {
+   "operation": "inspect_android_class",
+   "issues": [
+    {
+     "path": [
+      "class_name"
+     ],
+     "reason": "invalid_value",
+     "message": "Exact class not found: no.such.Klass; use search_android_classes to discover fully qualified names."
+    }
+   ],
+   "partial_observation": {
+    "provider_id": "jadx",
+    "operation": "inspect_android_class",
+    "target": {
+     "selected_path": "C:\\samples\\app.apk",
+     "path": "C:\\samples\\app.apk",
+     "sha256": "4cb09d3fec7784889c410602d395082af7402e9a44753ce5cebd7597f4f824f3",
+     "format": "apk"
+    },
+    "provider_facts": {
+     "jar_sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+     "bridge_sha256": "5a5a4e32264fbe597a329d7ad4b06a6266b7b31243e86b0263dbddcecaf351a1",
+     "bridge_name": "rea-jadx-bridge",
+     "bridge_version": "1",
+     "server_name": "rea-jadx-bridge",
+     "server_version": "1",
+     "engine_version": "0.7.1"
+    },
+    "calls": [
+     {
+      "operation": "rea_jvm_status",
+      "input": {},
+      "response": {
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"engine_reported_version\":\"0.7.1\",\"metadata_scope\":\"parsed_members\",\"max_heap_bytes\":8539602944,\"java_version\":\"21.0.13\",\"available_processors\":12}"
+        }
+       ],
+       "isError": false
+      }
+     },
+     {
+      "operation": "get_class_summary",
+      "input": {
+       "class_name": "no.such.Klass"
+      },
+      "response": {
+       "content": [
+        {
+         "type": "text",
+         "text": "{\"kind\":\"invalid-input\",\"message\":\"Exact class not found: no.such.Klass; use search_android_classes to discover fully qualified names.\",\"field\":\"class_name\"}"
+        }
+       ],
+       "isError": true
+      }
+     }
+    ]
+   }
+  }
+ }
+}

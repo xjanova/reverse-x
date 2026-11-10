@@ -9,7 +9,7 @@ namespace ReverseX.App.ViewModels;
 
 public enum StepState { Running, Ok, Failed }
 
-/// <summary>One REA call in the timeline: Thai title, the telling argument, tool name, state and time.</summary>
+/// <summary>One tool call in the timeline: title in the UI language, the telling argument, tool name, state and time.</summary>
 public sealed class StepVm : ObservableObject
 {
     private StepState _state = StepState.Running;
@@ -36,7 +36,7 @@ public sealed class StepVm : ObservableObject
     private static string IconFor(string tool) => tool switch
     {
         _ when tool.Contains("javascript") || tool.Contains("web") || tool.Contains("application_feature") => "javascript.png",
-        _ when tool.Contains("managed") => "dotnet.png",
+        _ when tool.Contains("managed") || tool.Contains("dotnet") => "dotnet.png",
         _ when tool.Contains("android") => "android.png",
         AgentToolbox.RecordFinding => "evidence.png",
         AgentToolbox.ListProjectFiles or AgentToolbox.ReadProjectFile or AgentToolbox.ProposeChange => "function.png",

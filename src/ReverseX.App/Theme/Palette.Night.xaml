@@ -110,6 +110,8 @@
     <SolidColorBrush x:Key="B.GreySoft" Color="#269AA9C0"/>
     <SolidColorBrush x:Key="B.GreySoftLine" Color="#669AA9C0"/>
     <SolidColorBrush x:Key="B.GreyText" Color="#C3CFE0"/>
+    <SolidColorBrush x:Key="B.SubPlate" Color="#B8071328"/>
+    <SolidColorBrush x:Key="B.SubPlateLine" Color="#40A9C3E6"/>
 
     <!-- เอฟเฟกต์ -->
     <DropShadowEffect x:Key="E.Num" BlurRadius="14" ShadowDepth="0" Color="#38D9F5" Opacity="0.5"/>

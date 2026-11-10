@@ -49,6 +49,8 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
     private IReadOnlyList<AiMessage> _history = Array.Empty<AiMessage>();
     private CancellationTokenSource? _cts;
     private ReaToolSession? _tools;
+    /// <summary>The local .NET list/decompiler for the current target, kept across questions (the type system is slow to build).</summary>
+    private DotNetCodeTools? _dotnetCode;
     private string? _targetPath;
     private FileKind _targetKind;
     private string _input = "";
@@ -182,6 +184,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         if (IsRunning) return;
         _targetPath = path;
         _targetKind = kind;
+        _dotnetCode = null;
         TargetName = Path.GetFileName(path.TrimEnd('\\', '/')) is { Length: > 0 } n ? n : path;
         Raise(nameof(HasTarget));
         NewChat();
@@ -243,7 +246,7 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
                 case ThinkingDelta: bot.IsThinking = true; break;
                 case StepStarted s:
                     bot.IsThinking = false;
-                    bot.Steps.Add(new StepVm(s.Id, s.Tool, s.Title, s.Detail));
+                    bot.Steps.Add(new StepVm(s.Id, s.Tool, StepTitle(s), s.Detail));
                     stepNo++;
                     bot.StatusChip = Loc.Format("Ai.Status.Step", stepNo);
                     break;
@@ -265,7 +268,9 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         try
         {
             var tools = await EnsureToolsAsync(bot, ct);
-            var box = new AgentToolbox(tools?.Caller ?? new NoReaCaller(), tools?.Tools ?? Array.Empty<ReaTool>(), _targetPath, _ownFolder, e => Post(() => Handle(e)));
+            if (_targetKind == FileKind.DotNet && _targetPath is not null) _dotnetCode ??= new DotNetCodeTools(_targetPath);
+            var box = new AgentToolbox(tools?.Caller ?? new NoReaCaller(), tools?.Tools ?? Array.Empty<ReaTool>(), _targetPath, _ownFolder,
+                e => Post(() => Handle(e)), targetKind: _targetKind, dotnetCode: _dotnetCode);
             var agent = new AiAgent(_svc.CreateStreamer(), box, e => Post(() => Handle(e)));
             var opt = new AgentOptions
             {
@@ -299,6 +304,14 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>The step heading in the UI language; a tool without an "Ai.Tool.…" string keeps Core's Thai title (or its own name).</summary>
+    private static string StepTitle(StepStarted s)
+    {
+        var key = "Ai.Tool." + s.Tool;
+        var title = Loc.Get(key);
+        return title == key ? s.Title : title;
+    }
+
     private sealed class NoReaCaller : IReaToolCaller
     {
         public Task<ReaToolResult> CallAsync(string tool, System.Text.Json.Nodes.JsonNode args, TimeSpan timeout, CancellationToken ct) =>
@@ -319,7 +332,8 @@ public sealed class AiViewModel : ObservableObject, IAsyncDisposable
         catch (Exception ex)
         {
             AppPaths.Log("REA tools for chat unavailable", ex);
-            bot.Notice = Loc.Get("Ai.NoRea");
+            // a .NET target still has the local list and C# tools
+            bot.Notice = Loc.Get(_targetKind == FileKind.DotNet ? "Ai.NoRea.Net" : "Ai.NoRea");
             return null;
         }
     }

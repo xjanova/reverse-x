@@ -344,11 +344,131 @@ public static class ReaResultParser
             var arr = FindPairArray(doc.RootElement, 0);
             if (arr.ValueKind != JsonValueKind.Array) return list;
             foreach (var it in arr.EnumerateArray())
-                if (it.ValueKind == JsonValueKind.Object)
-                    list.Add(new NativeProcedure(Str(it, "address") ?? "", Str(it, "value") ?? Str(it, "name") ?? ""));
+            {
+                if (it.ValueKind != JsonValueKind.Object) continue;
+                // Ghidra lists imports too ("EXTERNAL:0x1" = KERNEL32.DLL::FreeLibrary): they have no body in this file.
+                var proc = Prop(it, "procedure");
+                list.Add(new NativeProcedure(Str(it, "address") ?? "", Str(it, "value") ?? Str(it, "name") ?? "",
+                    Prop(proc, "external").ValueKind == JsonValueKind.True,
+                    Prop(proc, "thunk").ValueKind == JsonValueKind.True));
+            }
         }
         catch (JsonException) { }
         return list;
+    }
+
+    /// <summary>
+    /// procedure_pseudo_code / procedure_assembly: the engine's text is raw_result.value (Ghidra may answer null for a body it could
+    /// not decompile). Returns null text in that case, never throws on shape.
+    /// </summary>
+    public static NativeCode ParseCodeText(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var ev = Unwrap(doc.RootElement);
+            var raw = Prop(ev, "raw_result");
+            var text = raw.ValueKind == JsonValueKind.String ? raw.GetString() : Str(raw, "value");
+            var limits = Strings(raw, "limitations");
+            if (limits.Count == 0) limits = Strings(ev, "limitations");
+            var provider = Str(Prop(ev, "provider"), "name") ?? Str(Prop(ev, "provider"), "id") ?? "";
+            var version = Str(Prop(ev, "provider"), "version");
+            return new NativeCode(text?.Trim('\r', '\n'), limits, version is null ? provider : provider + " " + version);
+        }
+        catch (JsonException)
+        {
+            return new NativeCode(null, new List<string>(), "");
+        }
+    }
+
+    /// <summary>
+    /// procedure_callers / procedure_callees: normalized_result is a plain array of function entry addresses (raw_result is the same
+    /// array as the Ghidra bridge sent it). Never throws on shape; Addresses is null when no list can be found (unreadable, not "none").
+    /// </summary>
+    public static (List<string>? Addresses, List<string> Limitations, string Provider) ParseAddressList(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var ev = Unwrap(doc.RootElement);
+            var list = ListIn(Prop(ev, "normalized_result"));
+            if (list.ValueKind != JsonValueKind.Array) list = ListIn(Prop(ev, "raw_result"));
+            var addresses = list.ValueKind == JsonValueKind.Array
+                ? list.EnumerateArray().Where(a => a.ValueKind == JsonValueKind.String).Select(a => a.GetString()!)
+                    .Where(a => a.Length > 0).Distinct(StringComparer.Ordinal).ToList()
+                : null;
+            return (addresses, Strings(ev, "limitations"), ProviderOf(ev));
+        }
+        catch (JsonException)
+        {
+            return (null, new List<string>(), "");
+        }
+
+        // a plain array, or one wrapped as { "value": [...] }
+        static JsonElement ListIn(JsonElement e) => e.ValueKind == JsonValueKind.Object ? Prop(e, "value") : e;
+    }
+
+    // ───────────── Android (JADX headless MCP) ─────────────
+
+    /// <summary>inspect_android_class: the class's methods (with overload indices), fields and inner classes. Null when unreadable.</summary>
+    public static AndroidClassInfo? ParseAndroidClass(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var ev = Unwrap(doc.RootElement);
+            var n = Prop(ev, "normalized_result");
+            var name = Str(n, "class_name");
+            if (name is null) return null;
+            var methods = Items(n, "methods")
+                .Where(m => Str(m, "name") is not null)
+                .Select(m => new AndroidMethodRef(Str(m, "name") ?? "", Str(m, "reported_signature") ?? Str(m, "name") ?? "",
+                    Int(m, "overload_index"), Prop(m, "is_constructor").ValueKind == JsonValueKind.True))
+                .ToList();
+            var fields = Items(n, "fields")
+                .Where(f => Str(f, "name") is not null)
+                .Select(f => new AndroidField(Str(f, "name") ?? "", Str(f, "reported_type") ?? "?"))
+                .ToList();
+            var inner = Items(n, "inner_classes")
+                .Select(i => i.ValueKind == JsonValueKind.String ? i.GetString() : Str(i, "class_name") ?? Str(i, "name"))
+                .OfType<string>()
+                .ToList();
+            return new AndroidClassInfo(name, methods, fields, inner, Strings(ev, "limitations"), ProviderOf(ev));
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>inspect_android_method: one method's Java (or smali when JADX fell back). Never throws; unreadable text gives a null body.</summary>
+    public static AndroidMethodCode ParseAndroidMethod(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var n = Prop(Unwrap(doc.RootElement), "normalized_result");
+            var source = Prop(n, "source");
+            var text = source.ValueKind == JsonValueKind.String ? source.GetString() : Str(source, "text");
+            var markers = Items(n, "markers")
+                .Select(m => m.ValueKind == JsonValueKind.String ? m.GetString() : Str(m, "kind") ?? Str(m, "code"))
+                .OfType<string>()
+                .ToList();
+            return new AndroidMethodCode(text is { Length: > 0 } ? text.TrimEnd() : null, Str(n, "representation") ?? "java",
+                Prop(n, "fell_back").ValueKind == JsonValueKind.True, Str(source, "status") ?? Str(n, "body_status") ?? "", markers);
+        }
+        catch (JsonException)
+        {
+            return new AndroidMethodCode(null, "java", false, "", new List<string>());
+        }
+    }
+
+    private static string ProviderOf(JsonElement ev)
+    {
+        var p = Prop(ev, "provider");
+        var name = Str(p, "name") ?? Str(p, "id") ?? "";
+        var version = Str(p, "version");
+        return version is null ? name : name + " " + version;
     }
 
     private static JsonElement FindPairArray(JsonElement e, int depth)

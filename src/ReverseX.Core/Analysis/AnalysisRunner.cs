@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using ReverseX.Core.Files;
 using ReverseX.Core.Rea;
@@ -42,6 +43,13 @@ public sealed class AnalysisRunner
     public const int ModuleCap = 5000;
     public const int ProcedureCap = 20000;
     private static readonly TimeSpan Long = TimeSpan.FromMinutes(5);
+    /// <summary>The first native query waits for Ghidra's import + auto-analysis, which takes minutes on a large binary.</summary>
+    public static readonly TimeSpan NativeLong = TimeSpan.FromMinutes(30);
+    /// <summary>
+    /// Callers / callees are asked only after the function's code has loaded (the analysis is done), and Ghidra reads them from it:
+    /// a call this slow is a stuck engine, and the next click should not wait half an hour behind it.
+    /// </summary>
+    public static readonly TimeSpan NativeRefsTimeout = TimeSpan.FromMinutes(2);
 
     private readonly IReaToolCaller _rea;
     private readonly Func<string, CancellationToken, Task<string>>? _managedMembersCli;
@@ -216,7 +224,7 @@ public sealed class AnalysisRunner
 
         ct.ThrowIfCancellationRequested();
         Report(progress, "native.procs", 2, 3);
-        var r = await _rea.CallAsync("list_procedures", new JsonObject(), Long, ct).ConfigureAwait(false);
+        var r = await _rea.CallAsync("list_procedures", new JsonObject(), NativeLong, ct).ConfigureAwait(false);
         if (r.IsError)
         {
             var err = ReaResultParser.ParseError(r.Text);
@@ -228,15 +236,148 @@ public sealed class AnalysisRunner
         return (new NativeModel { Identity = identity, Procedures = all.Take(ProcedureCap).ToList(), ProcedureTotal = all.Count }, go);
     }
 
+    /// <summary>
+    /// A .NET snapshot built in-process from the assembly's metadata, for when REA cannot list the members (its admission budget,
+    /// no Node, REA down). The C# view works the same; only REA's CIL anchors are missing (DotNet.BuiltLocally says so).
+    /// Throws DecompileFailure(NotManaged) when the file has no CLI metadata at all.
+    /// </summary>
+    public static AnalysisSnapshot LocalDotNetSnapshot(string path, CancellationToken ct)
+    {
+        var (size, write) = SnapshotStore.Stamp(path);
+        return new AnalysisSnapshot
+        {
+            SourcePath = Path.GetFullPath(path),
+            SourceSize = size,
+            SourceWriteUtc = write,
+            CreatedUtc = DateTime.UtcNow,
+            ReaVersion = ReaLauncher.PinnedVersion,
+            Kind = AnalysisKind.DotNet,
+            DotNet = Decompile.ManagedListing.Build(path, ct),
+        };
+    }
+
     /// <summary>Selects the binary in this REA session (needed before function-level calls).</summary>
     public async Task OpenAsync(string path, CancellationToken ct) =>
         await CallTextAsync("open_binary", new JsonObject { ["path"] = Path.GetFullPath(path) }, Long, ct).ConfigureAwait(false);
 
-    /// <summary>Dossier for one native function (pseudo-code, assembly, callers…). Needs an engine; returns REA's JSON text.</summary>
-    public Task<string> AnalyzeFunctionAsync(string procedure, CancellationToken ct) =>
-        CallTextAsync("analyze_function", new JsonObject { ["procedure"] = procedure }, Long, ct);
-
     /// <summary>Caller/callee graph around one address. Needs an engine; returns REA's JSON text.</summary>
     public Task<string> CallGraphAsync(string address, CancellationToken ct) =>
-        CallTextAsync("get_call_graph", new JsonObject { ["address"] = address }, Long, ct);
+        CallTextAsync("get_call_graph", new JsonObject { ["address"] = address }, NativeLong, ct);
+
+    /// <summary>
+    /// The engine's pseudo-C or disassembly of one function (by address or symbol). The binary must already be open in this session.
+    /// REA errors become AnalysisFailure (InputRejected: no function there; NotSupported: no engine for this file). Timeouts and a dead
+    /// process stay TimeoutException / ReaException so a <see cref="TargetSessionCache"/> can drop the session first.
+    /// </summary>
+    public async Task<NativeCode> NativeCodeAsync(string procedure, NativeCodeView view, CancellationToken ct)
+    {
+        var tool = view == NativeCodeView.Assembly ? "procedure_assembly" : "procedure_pseudo_code";
+        var text = await CallTextAsync(tool, new JsonObject { ["procedure"] = procedure }, NativeLong, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseCodeText(text);
+    }
+
+    /// <summary>
+    /// Who calls one function and what it calls (procedure_callers, then procedure_callees). Ghidra answers both from its finished
+    /// analysis without decompiling, so they are quick once the function's code has loaded. Errors map as in NativeCodeAsync; an
+    /// answer with no address list is a Generic failure, never an empty list (that would read as "nothing calls it").
+    /// </summary>
+    public async Task<NativeRefs> NativeRefsAsync(string procedure, CancellationToken ct)
+    {
+        var callersText = await CallTextAsync("procedure_callers", new JsonObject { ["procedure"] = procedure }, NativeRefsTimeout, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var calleesText = await CallTextAsync("procedure_callees", new JsonObject { ["procedure"] = procedure }, NativeRefsTimeout, ct).ConfigureAwait(false);
+        var callers = ReaResultParser.ParseAddressList(callersText);
+        var callees = ReaResultParser.ParseAddressList(calleesText);
+        if (callers.Addresses is null || callees.Addresses is null)
+            throw new AnalysisFailure(AnalysisFailureKind.Generic, (callers.Addresses is null ? "procedure_callers" : "procedure_callees") + ": unreadable result");
+        var limits = callers.Limitations.Concat(callees.Limitations).Distinct(StringComparer.Ordinal).ToList();
+        return new NativeRefs(callers.Addresses, callees.Addresses, limits, callers.Provider.Length > 0 ? callers.Provider : callees.Provider);
+    }
+
+    // ───────────── Android → Java (JADX) ─────────────
+
+    /// <summary>The first JADX call on an APK loads it (a few seconds on a small app, longer on a big one); later calls are quick.</summary>
+    public static readonly TimeSpan AndroidCall = TimeSpan.FromMinutes(5);
+
+    /// <summary>Bodies fetched for one class view; each is one JADX call (~0.3 s), so huge classes stop here.</summary>
+    public const int MaxClassMethods = 80;
+
+    /// <summary>Members of one class. InputRejected when JADX has no class by that exact name.</summary>
+    public async Task<AndroidClassInfo> AndroidClassAsync(string apk, string className, CancellationToken ct)
+    {
+        var text = await CallTextAsync("inspect_android_class", new JsonObject
+        {
+            ["path"] = Path.GetFullPath(apk),
+            ["class_name"] = className,
+        }, AndroidCall, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseAndroidClass(text) ?? throw new AnalysisFailure(AnalysisFailureKind.Generic, "inspect_android_class: unreadable result");
+    }
+
+    public async Task<AndroidMethodCode> AndroidMethodAsync(string apk, string className, AndroidMethodRef method, CancellationToken ct)
+    {
+        var text = await CallTextAsync("inspect_android_method", new JsonObject
+        {
+            ["path"] = Path.GetFullPath(apk),
+            ["class_name"] = className,
+            ["method_name"] = method.Name,
+            ["overload_index"] = method.OverloadIndex,
+        }, AndroidCall, ct).ConfigureAwait(false);
+        return ReaResultParser.ParseAndroidMethod(text);
+    }
+
+    /// <summary>
+    /// One class as Java. JADX MCP gives the member list and then one body per call, so the class is put together here: package,
+    /// fields, then every method in JADX's order (up to <see cref="MaxClassMethods"/>). There is no class declaration line because
+    /// JADX does not report modifiers or supertypes; the page says so. Names from a DEX listing use '$' for inner classes, which
+    /// JADX may spell with '.', so that spelling is tried when the first is unknown.
+    /// </summary>
+    public async Task<AndroidClassCode> AndroidClassJavaAsync(string apk, string className, IProgress<(int Done, int Total)>? progress, CancellationToken ct)
+    {
+        // ct is honoured between calls, not inside one: a request REA is already running finishes (at most one method body), so a new
+        // click never makes REA give up the APK it loaded. Timeouts and a dead process still end a call.
+        var call = CancellationToken.None;
+        ct.ThrowIfCancellationRequested();
+        AndroidClassInfo info;
+        try { info = await AndroidClassAsync(apk, className, call).ConfigureAwait(false); }
+        catch (AnalysisFailure f) when (f.Kind == AnalysisFailureKind.InputRejected && className.Contains('$', StringComparison.Ordinal))
+        {
+            ct.ThrowIfCancellationRequested();
+            info = await AndroidClassAsync(apk, className.Replace('$', '.'), call).ConfigureAwait(false);
+        }
+
+        var name = info.ClassName;
+        // the package comes from the DEX spelling (Outer$Inner): JADX's "pkg.Outer.Inner" cannot tell a class from a package
+        var cut = className.LastIndexOf('.');
+        var sb = new StringBuilder();
+        if (cut > 0) sb.Append("package ").Append(className, 0, cut).Append(";\n\n");
+        foreach (var f in info.Fields) sb.Append("    ").Append(f.Type).Append(' ').Append(f.Name).Append(";\n");
+        if (info.Fields.Count > 0) sb.Append('\n');
+
+        var shown = Math.Min(info.Methods.Count, MaxClassMethods);
+        int fellBack = 0, noBody = 0;
+        progress?.Report((0, shown));
+        for (var i = 0; i < shown; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var m = info.Methods[i];
+            AndroidMethodCode code;
+            try { code = await AndroidMethodAsync(apk, name, m, call).ConfigureAwait(false); }
+            catch (AnalysisFailure f) when (f.Kind == AnalysisFailureKind.InputRejected)
+            {
+                code = new AndroidMethodCode(null, "java", false, "", Array.Empty<string>());
+            }
+            if (code.FellBack || code.Representation != "java") fellBack++;
+            if (code.Text is null)
+            {
+                noBody++;
+                sb.Append("    /* ").Append(m.Signature).Append(" */\n\n");
+            }
+            else
+            {
+                sb.Append(code.Text.Replace("\r\n", "\n", StringComparison.Ordinal)).Append("\n\n");
+            }
+            progress?.Report((i + 1, shown));
+        }
+        return new AndroidClassCode(name, sb.ToString().TrimEnd() + "\n", info.Methods.Count, shown, fellBack, noBody, info.Limitations, info.Provider);
+    }
 }

@@ -1,0 +1,76 @@
+{
+ "evidence_id": "ev_1a9bf63eda8be086c82ef6fe53a3f21e565ad22d351896a9654d8489f6f37f1c",
+ "subject": {
+  "name": "C:\\samples\\app.apk",
+  "digest": {
+   "sha256": "4cb09d3fec7784889c410602d395082af7402e9a44753ce5cebd7597f4f824f3"
+  },
+  "format": "apk",
+  "architecture": null,
+  "local_path": "C:\\samples\\app.apk"
+ },
+ "provider": {
+  "id": "jadx",
+  "name": "JADX headless",
+  "version": "0.7.1"
+ },
+ "analysis_profile": null,
+ "predicate_type": "rea.analysis",
+ "operation": "inspect_android_method",
+ "parameters": {
+  "path": "C:\\samples\\app.apk",
+  "class_name": "com.example.app.MainActivity",
+  "method_name": "onActivityResult"
+ },
+ "raw_result": {
+  "server": {
+   "name": "rea-jadx-bridge",
+   "version": "1"
+  },
+  "jar_sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+  "loaded": {
+   "state": "LOADED",
+   "apk_path": "C:\\Temp\\rea-android-0\\target.apk",
+   "class_count": 1178,
+   "resource_count": 410,
+   "threads": 1,
+   "resources": "full"
+  }
+ },
+ "normalized_result": {
+  "engine": {
+   "name": "jadx-headless-mcp",
+   "version": "0.7.1",
+   "artifact_sha256": "6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75",
+   "source_revision": "5844800a486d2248fa949b74c9896285f5b54de2",
+   "worker_count": 1,
+   "heap_limit_mib": 8144
+  },
+  "class_name": "com.example.app.MainActivity",
+  "method": {
+   "name": "onActivityResult",
+   "reported_signature": "onActivityResult(int, int, android.content.Intent): void",
+   "overload_index": 0,
+   "is_constructor": false,
+   "dex_descriptor": null
+  },
+  "overload_count": 1,
+  "representation": "java",
+  "body_status": "available",
+  "fell_back": false,
+  "markers": [],
+  "source": {
+   "status": "complete",
+   "text": "    @Override // u0.d, android.app.Activity\r\n    public final void onActivityResult(int i2, int i3, Intent intent) {\r\n        super.onActivityResult(i2, i3, intent);\r\n        if (i2 == this.f1537l) {\r\n            boolean zCanRequestPackageInstalls = Build.VERSION.SDK_INT >= 26 ? getPackageManager().canRequestPackageInstalls() : true;\r\n            p pVar = this.f1538m;\r\n            if (pVar != null) {\r\n                pVar.d(Boolean.valueOf(zCanRequestPackageInstalls));\r\n            }\r\n            this.f1538m = null;\r\n        }\r\n    }",
+   "reported_total_bytes": null
+  }
+ },
+ "confidence": "derived",
+ "authority": "shipped-artifact",
+ "limitations": [
+  "Static decompiler observations do not establish runtime behavior; the APK is never executed.",
+  "Method signatures use provider display types; exact DEX descriptors and instruction offsets are unavailable. Overload indices are local to this engine and artifact.",
+  "Class inventories use parsed metadata before code generation, including synthetic members that may be omitted from decompiled source. Source positions remain unknown.",
+  "Manifest summary fields are extracted by the upstream engine; decoded XML is retained for verification. APK signatures, split APKs, native libraries and Android runtime capture are not verified by this provider."
+ ]
+}

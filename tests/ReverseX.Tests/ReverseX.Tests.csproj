@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- -windows: the view-model tests drive the WPF app's view models on a Dispatcher thread -->
+    <TargetFramework>net8.0-windows</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
@@ -12,6 +13,7 @@
     <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\ReverseX.App\ReverseX.App.csproj" />
     <ProjectReference Include="..\..\src\ReverseX.Core\ReverseX.Core.csproj" />
     <ProjectReference Include="..\..\src\ReverseX.Licensing\ReverseX.Licensing.csproj" />
   </ItemGroup>

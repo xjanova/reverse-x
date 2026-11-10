@@ -57,8 +57,9 @@ public static class ToolSelector
 }
 
 /// <summary>
-/// Everything the model can call: the selected REA tools plus local tools (record_finding, get_result_page and, when the user chose
-/// their own project folder, list/read files and propose_file_change). Big results are shrunk before they go back to the model.
+/// Everything the model can call: the selected REA tools plus local tools (record_finding, get_result_page, for a .NET target
+/// list_dotnet_members/decompile_dotnet and, when the user chose their own project folder, list/read files and propose_file_change).
+/// Big results are shrunk before they go back to the model.
 /// </summary>
 public sealed class AgentToolbox
 {
@@ -67,19 +68,25 @@ public sealed class AgentToolbox
     public const string ListProjectFiles = "list_project_files";
     public const string ReadProjectFile = "read_project_file";
     public const string ProposeChange = "propose_file_change";
+    public const string ListDotNetMembers = "list_dotnet_members";
+    public const string DecompileDotNet = "decompile_dotnet";
 
     private static readonly Regex PathKey = new(@"(^|_)(path|file|artifact|binary|source|input|asar)s?$", RegexOptions.IgnoreCase);
+    private static readonly Regex LocalPathKey = new(@"(^|_)(path|file|artifact|binary|source|input|asar|assembly|module|dll)s?$", RegexOptions.IgnoreCase);
 
     private readonly IReaToolCaller _rea;
     private readonly IReadOnlyList<ReaTool> _reaTools;
     private readonly string[] _allowedRoots;
     private readonly string? _ownRoot;
+    private readonly DotNetCodeTools? _dotnet;
     private readonly ResultStore _store = new();
     private readonly Action<AgentEvent> _emit;
     private readonly TimeSpan _reaTimeout;
 
+    /// <param name="targetKind">A <see cref="FileKind.DotNet"/> target also gets the local .NET listing and C# decompile tools.</param>
+    /// <param name="dotnetCode">The caller's instance for this same target, kept across questions so the decompiler is built once.</param>
     public AgentToolbox(IReaToolCaller rea, IReadOnlyList<ReaTool> reaTools, string? targetPath, string? ownProjectRoot,
-        Action<AgentEvent> emit, TimeSpan? reaTimeout = null)
+        Action<AgentEvent> emit, TimeSpan? reaTimeout = null, FileKind targetKind = FileKind.Unknown, DotNetCodeTools? dotnetCode = null)
     {
         _rea = rea;
         _reaTools = reaTools;
@@ -87,7 +94,14 @@ public sealed class AgentToolbox
         _emit = emit;
         _reaTimeout = reaTimeout ?? TimeSpan.FromMinutes(5);
         _allowedRoots = Roots(targetPath);
+        if (targetKind == FileKind.DotNet && !string.IsNullOrWhiteSpace(targetPath))
+            _dotnet = dotnetCode is not null && dotnetCode.Path.Equals(Path.GetFullPath(targetPath), StringComparison.OrdinalIgnoreCase)
+                ? dotnetCode
+                : new DotNetCodeTools(targetPath);
     }
+
+    /// <summary>The local .NET tools are offered (the target is a .NET assembly).</summary>
+    public bool HasDotNetCode => _dotnet is not null;
 
     private static string[] Roots(string? target)
     {
@@ -110,6 +124,23 @@ public sealed class AgentToolbox
         defs.Add(new AiToolDef(GetResultPage,
             "Read another page of a tool result that was shortened (use the result_id shown in the note at the end of that result).",
             """{"type":"object","properties":{"result_id":{"type":"string"},"page":{"type":"integer","minimum":1}},"required":["result_id","page"]}"""));
+        if (_dotnet is not null)
+        {
+            defs.Add(new AiToolDef(ListDotNetMembers,
+                "List the types and methods of the opened .NET assembly, read locally from its metadata (works even when REA refuses the members). " +
+                "Each line starts with a metadata token: 0x02… = type, 0x06… = method; pass it to decompile_dotnet. " +
+                "filter = case-insensitive text matched against type full names and method names (a matching type is listed with all its methods). " +
+                "types_only = true leaves the methods out: a quick map of a big assembly. Long lists are shortened; read more with get_result_page. " +
+                "Always reads the opened file; takes no path.",
+                """{"type":"object","properties":{"filter":{"type":"string","description":"part of a namespace, type or method name"},"types_only":{"type":"boolean"}}}"""));
+            defs.Add(new AiToolDef(DecompileDotNet,
+                "Decompile part of the opened .NET assembly to C#, locally (ILSpy engine; nothing in the target runs). Prefer this for reading .NET code. " +
+                "Give token (0x06… method or 0x02… type, from list_dotnet_members), or type_name = full type name as listed (Namespace.Outer+Inner) " +
+                "and optionally method_name = a method of that type (every overload with that name is returned). " +
+                "whole_type = true with a method returns its whole declaring type. Property/event accessors come back as the property/event. " +
+                "Long code is shortened; read more with get_result_page. Always reads the opened file; takes no path.",
+                """{"type":"object","properties":{"token":{"type":"string","description":"0x06… method or 0x02… type token"},"type_name":{"type":"string"},"method_name":{"type":"string"},"whole_type":{"type":"boolean"}}}"""));
+        }
         if (_ownRoot is not null)
         {
             defs.Add(new AiToolDef(ListProjectFiles, "List files of the user's own project (relative paths, up to 300).", EmptySchema));
@@ -127,7 +158,8 @@ public sealed class AgentToolbox
 
     private static string Trim(string s, int n) => s.Length <= n ? s : s[..n] + "…";
 
-    public bool IsLocal(string name) => name is RecordFinding or GetResultPage or ListProjectFiles or ReadProjectFile or ProposeChange;
+    public bool IsLocal(string name) =>
+        name is RecordFinding or GetResultPage or ListProjectFiles or ReadProjectFile or ProposeChange or ListDotNetMembers or DecompileDotNet;
 
     public async Task<ToolOutput> ExecuteAsync(string name, string inputJson, CancellationToken ct)
     {
@@ -140,11 +172,13 @@ public sealed class AgentToolbox
         {
             case RecordFinding: return Record(obj);
             case GetResultPage:
-                return new ToolOutput(ResultShrinker.Page(_store, Str(obj, "result_id") ?? "", obj["page"]?.GetValue<int>() ?? 1), false);
+                return new ToolOutput(ResultShrinker.Page(_store, Str(obj, "result_id") ?? "", Int(obj, "page") ?? 1), false);
             case ListProjectFiles when _ownRoot is not null:
                 return new ToolOutput(string.Join('\n', CodeChange.ListFiles(_ownRoot)), false);
             case ReadProjectFile when _ownRoot is not null: return ReadOwn(obj);
             case ProposeChange when _ownRoot is not null: return Propose(obj);
+            case ListDotNetMembers or DecompileDotNet when _dotnet is not null:
+                return await DotNetAsync(_dotnet, name, obj, ct).ConfigureAwait(false);
         }
 
         if (_reaTools.All(t => t.Name != name)) return new ToolOutput($"tool \"{name}\" is not available for this project", true);
@@ -191,12 +225,61 @@ public sealed class AgentToolbox
         return ok ? null : $"path \"{s}\" is outside the project being analysed; only the opened project may be read";
     }
 
+    private async Task<ToolOutput> DotNetAsync(DotNetCodeTools dn, string name, JsonObject o, CancellationToken ct)
+    {
+        var foreign = ForeignPath(dn, name, o);
+        if (foreign is not null) return new ToolOutput(foreign, true);
+        ct.ThrowIfCancellationRequested();
+        var work = name == ListDotNetMembers
+            ? Task.Run(() => dn.List(Str(o, "filter"), Bool(o, "types_only"), ct), ct)
+            : Task.Run(() => dn.Decompile(TokenArg(o), Str(o, "type_name"), Str(o, "method_name"), Bool(o, "whole_type"), ct), ct);
+        // building the type system cannot be interrupted: a cancel returns at once and lets that finish (and be kept) in the background
+        var r = await work.WaitAsync(ct).ConfigureAwait(false);
+        return r.IsError ? r : new ToolOutput(ResultShrinker.Shrink(r.Text, _store), false);
+    }
+
+    /// <summary>
+    /// The .NET tools read only the opened file. A path-like argument is refused unless it names that same file (models echo the
+    /// target path from the system prompt), so a hostile binary cannot steer the decompiler at another file.
+    /// </summary>
+    private static string? ForeignPath(DotNetCodeTools dn, string tool, JsonObject o)
+    {
+        foreach (var kv in o)
+        {
+            if (!LocalPathKey.IsMatch(kv.Key) || kv.Value is null) continue;
+            IEnumerable<JsonNode?> values = kv.Value is JsonArray arr ? arr : new[] { kv.Value };
+            foreach (var v in values)
+            {
+                if (v is JsonValue jv && jv.TryGetValue<string>(out var s) && IsTarget(dn, s)) continue;
+                return $"{tool} reads only the opened assembly ({dn.FileName}) and takes no path or file; call again without \"{kv.Key}\"";
+            }
+        }
+        return null;
+    }
+
+    private static bool IsTarget(DotNetCodeTools dn, string s)
+    {
+        if (s.Trim().Equals(dn.FileName, StringComparison.OrdinalIgnoreCase)) return true;
+        if (!Path.IsPathFullyQualified(s)) return false;
+        try { return Path.GetFullPath(s).Equals(dn.Path, StringComparison.OrdinalIgnoreCase); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return false; }
+    }
+
+    /// <summary>A token as a string ("0x06000012"), or as the plain number some models send.</summary>
+    private static string? TokenArg(JsonObject o) =>
+        o["token"] is JsonValue v && v.TryGetValue<long>(out var n) && n is > 0 and <= int.MaxValue
+            ? "0x" + n.ToString("X8", System.Globalization.CultureInfo.InvariantCulture)
+            : Str(o, "token");
+
+    private static bool Bool(JsonObject o, string key) => o[key] is JsonValue v
+        && ((v.TryGetValue<bool>(out var b) && b) || (v.TryGetValue<string>(out var s) && bool.TryParse(s, out var p) && p));
+
     private ToolOutput Record(JsonObject o)
     {
         var kind = Str(o, "kind");
         var text = Str(o, "text");
         if (string.IsNullOrWhiteSpace(text)) return new ToolOutput("text is required", true);
-        var steps = (o["steps"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? "").Where(x => x.Length > 0).ToList() ?? new List<string>();
+        var steps = (o["steps"] as JsonArray)?.OfType<JsonValue>().Select(x => x.TryGetValue<string>(out var s) ? s : "").Where(x => x.Length > 0).ToList() ?? new List<string>();
         Finding f;
         switch (kind)
         {
@@ -230,4 +313,13 @@ public sealed class AgentToolbox
     }
 
     private static string? Str(JsonObject o, string key) => o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+
+    /// <summary>Models send numbers as 2, 2.0 or "2"; GetValue&lt;int&gt; would throw on the last two.</summary>
+    private static int? Int(JsonObject o, string key)
+    {
+        if (o[key] is not JsonValue v) return null;
+        if (v.TryGetValue<int>(out var i)) return i;
+        if (v.TryGetValue<double>(out var d) && d is >= int.MinValue and <= int.MaxValue) return (int)d;
+        return v.TryGetValue<string>(out var s) && int.TryParse(s.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var p) ? p : null;
+    }
 }

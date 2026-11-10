@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ReverseX.Core.Engines;
 
 namespace ReverseX.Core.Rea;
 
@@ -9,7 +10,12 @@ public static class ReaLauncher
     public const string PinnedVersion = "6.4.0";
     public static string PackageSpec => $"{PackageName}@{PinnedVersion}";
 
-    public static ProcessStartInfo Create(NodeInfo node, IEnumerable<string> reaArgs, string? workingDirectory = null)
+    /// <param name="engines">
+    /// Engine selection passed to REA (GHIDRA_INSTALL_DIR, JAVA_HOME, PATH, REA_JADX_MCP_JAR); null resolves it now with
+    /// <see cref="EngineLocator.ResolveDefault"/>, so engines installed while the app runs are used by the next REA start.
+    /// </param>
+    public static ProcessStartInfo Create(NodeInfo node, IEnumerable<string> reaArgs, string? workingDirectory = null,
+        EngineEnvironment? engines = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -42,6 +48,7 @@ public static class ReaLauncher
         psi.ArgumentList.Add("-y");
         psi.ArgumentList.Add(PackageSpec);
         foreach (var a in reaArgs) psi.ArgumentList.Add(a);
+        (engines ?? EngineLocator.ResolveDefault()).ApplyTo(psi.Environment);
         psi.Environment["NO_COLOR"] = "1";
         return psi;
     }
