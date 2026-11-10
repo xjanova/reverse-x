@@ -431,3 +431,20 @@
 - ซ้อมออกรุ่นในเครื่องแบบเดียวกับ CI: `deploy/publish.ps1 -Version 0.1.0 -RequireSignature` เซ็น 478 ไฟล์ ได้ zip 83.5 MB พร้อม `.sig` และ `.sha256`
   - `UpdateTests` ทั้งชุดรวม `RealReleaseZip_*` ที่ใช้ zip นี้ผ่าน 25 ข้าม 0
 - ยังไม่ได้ push, merge หรือติด tag
+
+## ออกรุ่นแรก v0.1.0 (2026-11-10)
+
+### ทำอะไร
+- push `feat/real-decompile` แล้ว merge PR #1 เข้า `main` เป็น merge commit `94ea3fa` จากนั้นติด tag `v0.1.0` ที่ commit นั้น
+- release.yml รอบแรก (run 42840426408 attempt 1) ล้มที่ขั้นเซ็นไฟล์: `REVERSEX_UPDATE_SIGNING_KEY is not a base64 PKCS#8 ECDSA key.`
+  - ไฟล์กุญแจในเครื่องไม่มีปัญหา: เซ็นไฟล์ทดสอบแล้วตรวจผ่านกับกุญแจที่ compile อยู่ในแอป
+  - ตั้ง secret ใหม่ด้วยการส่งไบต์ของไฟล์เข้า `gh secret set` ตรง ๆ ทาง bash แล้วสั่งรันงานที่ล้มซ้ำบน tag เดิม ไม่ได้ติด tag ใหม่
+  - ต้นเหตุยังไม่ยืนยัน: รอบแรกส่งค่าผ่าน pipe ของ PowerShell 5.1 ตัวเซ็นตัดช่องว่างกับขึ้นบรรทัดใหม่ทิ้งก่อน decode อยู่แล้ว ค่าจึงน่าจะเพี้ยนมากกว่านั้น เช่น encoding หรือ BOM
+- กับดัก: secret ที่เป็นไฟล์ ให้ตั้งจากไฟล์ตรง ๆ (`gh secret set NAME --repo ... < file` ใน bash) อย่าส่งผ่าน pipe ของ PowerShell
+
+### ผล
+- attempt 2 ผ่าน (15:09 UTC) release `Reverse X v0.1.0` (ไม่ใช่ draft หรือ prerelease) มี `ReverseX-0.1.0-win-x64.zip` (89,900,800 ไบต์) พร้อม `.sig` และ `.sha256`
+- sha256 `1ab1b0bc…eb5c` ตรงกันทั้ง 4 แหล่ง: ไฟล์ `.sha256`, ค่าที่คำนวณจาก zip ที่โหลดมา, ค่าที่ `update/check` ของ xman4289.com ตอบ และไฟล์ที่โหลดผ่าน `download_url` ของ xman4289.com
+- `https://xman4289.com/api/v1/product/reverse-x/update/check?current_version=0.0.0` ตอบ `has_update: true`, `latest_version: "0.1.0"`
+- `RealReleaseZip_PassesTheAppsOwnPipeline_WithTheCompiledKey` กับ zip ที่โหลดจาก release จริงผ่าน: ตรวจ manifest ผ่าน ติดตั้งผ่าน และ `.sig` ของ zip เข้าคู่กับกุญแจในแอป
+- ยังต้องทำ: สำรอง `%USERPROFILE%\.xman-signing\reversex-update-signing-key.txt` ไว้นอกเครื่อง ถ้าไฟล์นี้หาย จะออกอัปเดตต่อไม่ได้
