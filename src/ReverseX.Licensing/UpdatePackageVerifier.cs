@@ -19,11 +19,12 @@ public static class UpdatePackageVerifier
     public const string ProductSlug = "reverse-x";
     public const string MainExe = "ReverseX.exe";
 
-    // SubjectPublicKeyInfo of the release signing key (ECDSA P-256), created 2026-10-16 with tools/ReleaseSigner keygen.
+    // SubjectPublicKeyInfo of the release signing key (ECDSA P-256), created 2026-11-10 with tools/ReleaseSigner keygen.
+    // It replaced the 2026-10-16 key, whose private half was lost before any release shipped.
     // The private half is the REVERSEX_UPDATE_SIGNING_KEY secret of github.com/xjanova/reverse-x
     // (owner backup: %USERPROFILE%\.xman-signing\reversex-update-signing-key.txt). It is never in this repository.
     public const string ReleasePublicKey =
-        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyXmJVzuRxgHQ5ACkMVLiKJFdzGBSxwr33VuRA67SYYVQUAgvTo1GOi4uCjfbQ8kBmY7gq/E4bPmGrMxoVfGFpg==";
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGrgJ761L4v1SDl6eMswDdc1ULtNiG5NdYBmew3AfqkhoxMRkaTOnrxjH1wQDa95bO/6dG/Dl065QNLrit488rg==";
 
     private const long MaxManifestBytes = 4 * 1024 * 1024;
 

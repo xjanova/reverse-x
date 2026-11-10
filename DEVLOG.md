@@ -410,3 +410,24 @@
 - ยังไม่ได้ติดตั้ง Ghidra (543 MB) ผ่านปุ่มของแอปจริง ทดสอบจริงแค่ JADX ส่วน Ghidra กับ JDK ตรวจผ่าน installer ใน Core มาแล้ว
 - ช่องการอ้างอิงของฟังก์ชัน native ยังว่างอยู่ ตอนนี้ให้ดูการเรียกจากในโค้ด C จำลองไปก่อน
 - เครื่องมือ AI ยังไม่มีคำสั่ง "ถอด .NET เป็น C#" ของตัวเอง
+
+## เปลี่ยนกุญแจเซ็นอัปเดต (2026-11-10)
+
+### ทำไม
+- กุญแจส่วนตัวชุด 2026-10-16 หายไปจากเครื่อง: ไม่มี `%USERPROFILE%\.xman-signing\` แล้ว และยังไม่เคยตั้ง secret `REVERSEX_UPDATE_SIGNING_KEY` ใน repo ถ้าติด tag ตอนนั้น release.yml จะล้มที่ขั้น "Publish, sign and zip"
+- ยังไม่เคยออก release หรือ tag เลย จึงไม่มีเครื่องผู้ใช้ที่เชื่อกุญแจเก่า เจ้าของจึงเลือกสร้างคู่ใหม่แทนการตามหาไฟล์สำรอง
+
+### ทำอะไร
+- `ReleaseSigner keygen` สร้างคู่ ECDSA P-256 ใหม่ กุญแจส่วนตัวอยู่ที่ `%USERPROFILE%\.xman-signing\reversex-update-signing-key.txt` (ไม่อยู่ใน repo)
+- เปลี่ยน `UpdatePackageVerifier.ReleasePublicKey` เป็นกุญแจสาธารณะตัวใหม่ เทสต์อ่านค่าจาก const นี้ จึงไม่มีที่อื่นต้องแก้
+- ตั้ง secret `REVERSEX_UPDATE_SIGNING_KEY` ด้วย `gh secret set` โดยส่งค่าเข้าทาง stdin ไม่ได้ส่งเป็น argument
+- `ReleaseSigner sign-file` เซ็นไฟล์ทดสอบแล้วตรวจกับกุญแจที่ compile อยู่ในแอปผ่าน แปลว่าสองครึ่งเข้าคู่กัน
+- โฟลเดอร์ `.xman-signing` เดิมได้สิทธิ์ต่อมาจากโฟลเดอร์ผู้ใช้ ซึ่งให้ `CodexSandboxUsers` อ่านได้ด้วย จึงตัดสิทธิ์ที่ได้ต่อมาออก เหลือแค่ผู้ใช้, SYSTEM และ Administrators
+  - กับดัก: `icacls <folder> /grant:r "user:(OI)(CI)F" /T` เอา flag ของโฟลเดอร์ไปใส่ให้ไฟล์ด้วย ไฟล์เลยไม่เหลือสิทธิ์ของใครเลย ต้องตั้งสิทธิ์ของไฟล์แยกโดยไม่มี `(OI)(CI)` (เจ้าของไฟล์ยังแก้สิทธิ์ได้เสมอ)
+
+### ผล
+- `dotnet build ReverseX.slnx -c Release`: 0 warning 0 error
+- `REVERSEX_SKIP_REA=1 dotnet test -c Release`: ผ่าน 408 ข้าม 15
+- ซ้อมออกรุ่นในเครื่องแบบเดียวกับ CI: `deploy/publish.ps1 -Version 0.1.0 -RequireSignature` เซ็น 478 ไฟล์ ได้ zip 83.5 MB พร้อม `.sig` และ `.sha256`
+  - `UpdateTests` ทั้งชุดรวม `RealReleaseZip_*` ที่ใช้ zip นี้ผ่าน 25 ข้าม 0
+- ยังไม่ได้ push, merge หรือติด tag
